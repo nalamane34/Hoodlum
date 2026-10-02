@@ -83,6 +83,7 @@
   .mono { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); }
   .empty { color: var(--muted); font-size: 12px; padding: 30px 0; text-align: center; }
   a { color: inherit; }
+  a.theme { text-decoration: none; }
   @media (max-width: 600px) { .tile.hero .value { font-size: 38px; } header { gap: 8px 12px; } }
 </style>
 </head>
@@ -94,6 +95,7 @@
   <span id="killPill" class="pill" hidden><span class="dot"></span><span>kill switch</span></span>
   <span id="statusLine" class="mono"></span>
   <button class="theme" id="themeBtn" type="button" title="Toggle theme">theme</button>
+  <a class="theme" href="/logout" title="Forget this browser's sign-in">sign out</a>
 </header>
 <div class="filters" role="group" aria-label="Time window">
   <button type="button" data-hours="1">1h</button>
@@ -515,6 +517,7 @@
     try {
       const u = new URL("/api/summary", location.href); u.searchParams.set("hours", String(hours)); if (token) u.searchParams.set("token", token);
       const res = await fetch(u, { credentials: "same-origin", cache: "no-store" });
+      if (res.status === 401) { location.href = "/login?next=" + encodeURIComponent(location.pathname + location.search); return; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       render(await res.json());
     } catch (e) {

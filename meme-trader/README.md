@@ -78,7 +78,9 @@ On a server the deploy script installs it as `meme-trader-dashboard`. Two ways t
 - Tunnel (nothing exposed): `ssh -i YOUR.pem -L 8787:127.0.0.1:8787 ubuntu@SERVER_IP`, then open http://localhost:8787/ while that SSH session is open.
 - Public with a token: set `DASHBOARD_HOST=0.0.0.0` in `.env` (the setup script already generated `DASHBOARD_TOKEN`), open port 8787 in the security group (your IP only is best), `sudo systemctl restart meme-trader-dashboard`, then open `http://SERVER_IP:8787/?token=YOUR_TOKEN` once; a cookie keeps you signed in.
 
-The dashboard only reads files; it cannot trade or change settings.
+- Public HTTPS URL (free): `bash deploy/expose.sh` installs Caddy, obtains a Let's Encrypt certificate for `<ip-with-dashes>.sslip.io` (or a hostname you pass, e.g. a free DuckDNS name), and proxies to the dashboard, which stays bound to loopback. Open ports 80 and 443 in the security group, then sign in once on the `/login` page with `DASHBOARD_TOKEN`. Allocate an Elastic IP so the address, and with it the sslip.io name, survives a stop/start.
+
+Sign-in is a token entered once on `/login` (cookie, `Secure` behind HTTPS, 8 attempts per minute per client). `/logout` forgets the browser. The dashboard only reads files; it cannot trade or change settings.
 
 ## Configuration
 
