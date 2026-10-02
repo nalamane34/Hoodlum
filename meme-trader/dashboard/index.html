@@ -154,6 +154,10 @@
       <header><h2>Log</h2><span class="sub">last 60 lines of bot.log</span></header>
       <pre class="log" id="log"></pre>
     </figure>
+    <figure class="card wide" id="fig-agent" hidden>
+      <header><h2>Remote jobs</h2><span class="sub" id="agentSub">deploy/jobs run by the server's job runner</span></header>
+      <div id="agentJobs"></div>
+    </figure>
   </div>
 </main>
 <div class="tip" id="tip"></div>
@@ -511,6 +515,26 @@
     log.scrollTop = log.scrollHeight;
   }
 
+  // ---------- remote jobs ----------
+  async function refreshAgent() {
+    try {
+      const res = await fetch("/api/agent", { credentials: "same-origin", cache: "no-store" });
+      if (!res.ok) return;
+      const a = await res.json();
+      const fig = $("#fig-agent");
+      if (!a.jobs.length && !a.agentLog.length) { fig.hidden = true; return; }
+      fig.hidden = false;
+      const host = $("#agentJobs"); host.replaceChildren();
+      const pre = el("pre", { class: "log", style: "max-height:160px" }); pre.textContent = a.agentLog.join("\n") || "(no agent log yet)"; host.appendChild(pre);
+      for (const j of [...a.jobs].reverse()) {
+        const d = el("details"); const sm = el("summary", { style: "cursor:pointer;margin:8px 0 4px;font-size:13px" });
+        const status = j.exit === null ? "running or interrupted" : j.exit === 0 ? "ok" : `failed (exit ${j.exit})`;
+        sm.appendChild(el("span", { class: j.exit === 0 ? "pos" : j.exit === null ? "" : "neg", text: `${j.name} · ${status} · ${ago(j.mtime)}` }));
+        d.appendChild(sm); const p2 = el("pre", { class: "log", style: "max-height:300px" }); p2.textContent = j.tail.join("\n"); d.appendChild(p2); host.appendChild(d);
+      }
+    } catch {}
+  }
+
   // ---------- fetch loop ----------
   async function refresh() {
     for (const p of document.querySelectorAll(".plot")) p.classList.add("stale");
@@ -520,6 +544,7 @@
       if (res.status === 401) { location.href = "/login?next=" + encodeURIComponent(location.pathname + location.search); return; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       render(await res.json());
+      refreshAgent();
     } catch (e) {
       $("#updatedAt").textContent = `refresh failed: ${e.message}`;
       $("#updatedAt").title = e.stack || "";

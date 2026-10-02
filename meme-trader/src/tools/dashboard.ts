@@ -164,6 +164,23 @@ const server = http.createServer(async (req, res) => {
       res.end(fs.readFileSync(htmlFile, "utf8"));
       return;
     }
+    if (url.pathname === "/api/agent") {
+      const dir = dataPath(DATA_DIR, "agent");
+      const jobs: { name: string; mtime: number; exit: number | null; tail: string[] }[] = [];
+      let agentLog: string[] = [];
+      if (fs.existsSync(dir)) {
+        agentLog = tailLines(path.join(dir, "agent.log"), 40);
+        for (const f of fs.readdirSync(dir).filter((x) => /^\d+-.*\.log$/.test(x)).sort()) {
+          const file = path.join(dir, f);
+          const tail = tailLines(file, 120);
+          const m = /finished .* exit (\d+)/.exec(tail[tail.length - 1] ?? "");
+          jobs.push({ name: f.replace(/\.log$/, ""), mtime: fileMtimeMs(file) ?? 0, exit: m ? Number(m[1]) : null, tail });
+        }
+      }
+      res.writeHead(200, { ...headers, "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ generatedAt: Date.now(), agentLog, jobs: jobs.slice(-10) }));
+      return;
+    }
     if (url.pathname === "/api/summary") {
       const hours = Math.min(24 * 30, Math.max(1, Number(url.searchParams.get("hours") ?? 24) || 24));
       const hit = cache.get(hours);

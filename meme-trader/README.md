@@ -82,6 +82,12 @@ On a server the deploy script installs it as `meme-trader-dashboard`. Two ways t
 
 Sign-in is a token entered once on `/login` (cookie, `Secure` behind HTTPS, 8 attempts per minute per client). `/logout` forgets the browser. The dashboard only reads files; it cannot trade or change settings.
 
+## Remote jobs runner (optional, hands-off operations)
+
+`bash deploy/install-agent.sh` installs a systemd timer that every two minutes pulls this branch and runs any new `deploy/jobs/NNN-*.sh` exactly once, in order, logging to `data/agent/`. It is how the server can be operated without SSH: push a job, the server runs it, the result shows on the dashboard under "Remote jobs" (and at `/api/agent`). Job 001 rebuilds the bot and puts the dashboard on HTTPS.
+
+Security: anyone who can push to this branch can then run commands on the server as the login user. Keep push access to yourself, keep the repository readable by the server (public, or add a read-only deploy key if you make it private), and disable the runner at any time with `sudo systemctl disable --now meme-trader-agent.timer`. Jobs never re-run, even after a failure; a retry is a new job number.
+
 ## Configuration
 
 Everything lives in `.env`; `.env.example` documents each setting. The important groups:
