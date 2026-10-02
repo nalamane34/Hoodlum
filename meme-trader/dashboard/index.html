@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>meme-trader</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --gray: #c3c2b7;
+    --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b; --good-text: #006300;
+    --ring: #fcfcfb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --gray: #52514e; --good-text: #0ca30c; --ring: #1a1a19;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --gray: #52514e; --good-text: #0ca30c; --ring: #1a1a19;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 16px; font-weight: 600; margin: 0; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--ink-2); }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .pill.on .dot { background: var(--good); } .pill.off .dot { background: var(--critical); } .pill.warn .dot { background: var(--warning); }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; }
+  .filters button, .tbl-toggle, .theme { font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); cursor: pointer; }
+  .filters button[aria-pressed="true"] { color: var(--ink); font-weight: 600; border-color: var(--ink-2); }
+  .filters .spacer { flex: 1; }
+  .filters .meta { font-size: 12px; color: var(--muted); }
+  main { padding: 0 16px 32px; max-width: 1400px; margin: 0 auto; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 6px 0 14px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-height: 84px; }
+  .tile .label { font-size: 12px; color: var(--ink-2); }
+  .tile .value { font-size: 22px; font-weight: 600; margin-top: 4px; white-space: nowrap; }
+  .tile.hero { grid-column: span 2; }
+  .tile.hero .value { font-size: 48px; line-height: 1.05; white-space: nowrap; }
+  .tile .unit { font-size: 15px; font-weight: 500; color: var(--ink-2); margin-left: 6px; }
+  .tile .delta { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .tile .delta.up { color: var(--good-text); } .tile .delta.down { color: var(--critical); }
+  .tile svg { display: block; margin-top: 6px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+  figure.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 10px; margin: 0; position: relative; }
+  figure.card.wide { grid-column: 1 / -1; }
+  figure.card header { padding: 0 0 6px; border: 0; display: flex; align-items: baseline; gap: 8px; }
+  figure.card h2 { font-size: 13px; font-weight: 600; margin: 0; }
+  figure.card .sub { font-size: 12px; color: var(--muted); }
+  figure.card .tbl-toggle { margin-left: auto; padding: 2px 8px; }
+  .plot { width: 100%; min-height: 160px; position: relative; transition: opacity .2s; }
+  .plot.stale { opacity: .55; }
+  .plot.short { min-height: 0; }
+  .funnel { display: flex; gap: 2px; height: 28px; }
+  .funnel .seg { min-width: 6px; display: flex; align-items: center; padding: 0 8px; font-size: 12px; white-space: nowrap; outline: none; }
+  .funnel .seg:first-child { border-radius: 4px 0 0 4px; } .funnel .seg:last-child { border-radius: 0 4px 4px 0; }
+  .funnel .seg:focus-visible { box-shadow: 0 0 0 2px var(--ink-2); }
+  .plot svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+  .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
+  .legend .ln { display: inline-block; width: 14px; height: 2px; vertical-align: 3px; margin-right: 5px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th { color: var(--ink-2); font-weight: 600; } td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td .pos { color: var(--good-text); } td .neg { color: var(--critical); }
+  .table-wrap { overflow-x: auto; }
+  #missedTables { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 8px 20px; }
+  .tbl-view { display: none; } figure.card.table .tbl-view { display: block; } figure.card.table .plot, figure.card.table .legend { display: none; }
+  .tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.12); z-index: 5; display: none; min-width: 120px; }
+  .tip .v { font-weight: 600; color: var(--ink); } .tip .k { color: var(--ink-2); }
+  .tip .key { display: inline-block; width: 12px; height: 2px; vertical-align: 3px; margin-right: 5px; }
+  pre.log { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow: auto; max-height: 420px; color: var(--ink-2); white-space: pre-wrap; word-break: break-word; }
+  pre.log .warn { color: var(--serious); } pre.log .error { color: var(--critical); } pre.log .buy { color: var(--good-text); font-weight: 600; }
+  .mono { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); }
+  .empty { color: var(--muted); font-size: 12px; padding: 30px 0; text-align: center; }
+  a { color: inherit; }
+  @media (max-width: 600px) { .tile.hero .value { font-size: 38px; } header { gap: 8px 12px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>meme-trader</h1>
+  <span id="modePill" class="pill"><span class="dot"></span><span>mode</span></span>
+  <span id="alivePill" class="pill"><span class="dot"></span><span>checking</span></span>
+  <span id="killPill" class="pill" hidden><span class="dot"></span><span>kill switch</span></span>
+  <span id="statusLine" class="mono"></span>
+  <button class="theme" id="themeBtn" type="button" title="Toggle theme">theme</button>
+</header>
+<div class="filters" role="group" aria-label="Time window">
+  <button type="button" data-hours="1">1h</button>
+  <button type="button" data-hours="6">6h</button>
+  <button type="button" data-hours="24" aria-pressed="true">24h</button>
+  <button type="button" data-hours="168">7d</button>
+  <span class="spacer"></span>
+  <label class="meta"><input type="checkbox" id="autoRefresh" checked> auto-refresh 10s</label>
+  <span class="meta" id="updatedAt"></span>
+</div>
+<main>
+  <section class="kpis" id="kpis"></section>
+
+  <div class="grid">
+    <figure class="card" id="fig-pnl">
+      <header><h2>Realized PnL, cumulative</h2><span class="sub">closed positions in window, SOL</span><button class="tbl-toggle" type="button">table</button></header>
+      <div class="plot"></div><div class="tbl-view table-wrap"></div>
+    </figure>
+    <figure class="card" id="fig-launches">
+      <header><h2>Launches seen</h2><span class="sub" id="bucketLabel">per hour</span><button class="tbl-toggle" type="button">table</button></header>
+      <div class="plot"></div><div class="legend"></div><div class="tbl-view table-wrap"></div>
+    </figure>
+    <figure class="card wide" id="fig-funnel">
+      <header><h2>Decision funnel</h2><span class="sub">what happened to every launch in the window</span><button class="tbl-toggle" type="button">table</button></header>
+      <div class="plot short"></div><div class="legend"></div><div class="tbl-view table-wrap"></div>
+    </figure>
+    <figure class="card" id="fig-reasons">
+      <header><h2>Why launches were skipped</h2><span class="sub">hard-fail reasons, a launch can have several</span><button class="tbl-toggle" type="button">table</button></header>
+      <div class="plot"></div><div class="tbl-view table-wrap"></div>
+    </figure>
+    <figure class="card" id="fig-scores">
+      <header><h2>Scores of fully observed launches</h2><span class="sub" id="minScoreLabel"></span><button class="tbl-toggle" type="button">table</button></header>
+      <div class="plot"></div><div class="tbl-view table-wrap"></div>
+    </figure>
+    <figure class="card" id="fig-shadow">
+      <header><h2>What skipped launches did next</h2><span class="sub" id="shadowSub">market cap at end of shadow window vs at decision</span><button class="tbl-toggle" type="button">table</button></header>
+      <div class="plot"></div><div class="tbl-view table-wrap"></div>
+    </figure>
+    <figure class="card wide" id="fig-missed">
+      <header><h2>Biggest misses and best dodges</h2><span class="sub">skipped launches ranked by what they did</span></header>
+      <div class="table-wrap" id="missedTables"></div>
+    </figure>
+    <figure class="card wide" id="fig-open">
+      <header><h2>Open positions</h2><span class="sub" id="openSub"></span></header>
+      <div class="table-wrap" id="openTable"></div>
+    </figure>
+    <figure class="card wide" id="fig-closed">
+      <header><h2>Closed positions</h2><span class="sub">most recent 25</span></header>
+      <div class="table-wrap" id="closedTable"></div>
+    </figure>
+    <figure class="card wide" id="fig-decisions">
+      <header><h2>Latest decisions</h2><span class="sub">most recent 30 launches scored</span></header>
+      <div class="table-wrap" id="decisionsTable"></div>
+    </figure>
+    <figure class="card wide" id="fig-log">
+      <header><h2>Log</h2><span class="sub">last 60 lines of bot.log</span></header>
+      <pre class="log" id="log"></pre>
+    </figure>
+  </div>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (s, el = document) => el.querySelector(s);
+  const SVG = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs = {}, ns) => { const e = ns ? document.createElementNS(ns, tag) : document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === "text") e.textContent = v; else e.setAttribute(k, v); } return e; };
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const fmtSol = (x, d = 4) => (x === null || x === undefined ? "–" : (x >= 0 ? "" : "-") + Math.abs(x).toFixed(d) + " SOL");
+  const fmtTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const fmtDT = (ts) => new Date(ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const fmtDur = (s) => (s < 90 ? `${s}s` : s < 5400 ? `${Math.round(s / 60)}m` : `${(s / 3600).toFixed(1)}h`);
+  const ago = (ts) => { const s = Math.round((Date.now() - ts) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${(s / 3600).toFixed(1)}h ago`; };
+  const token = new URLSearchParams(location.search).get("token");
+  const tip = $("#tip");
+
+  let hours = 24;
+  let timer = null;
+
+  // ---------- theme ----------
+  const applyTheme = (t) => { if (t) document.documentElement.setAttribute("data-theme", t); else document.documentElement.removeAttribute("data-theme"); };
+  const themeParam = new URLSearchParams(location.search).get("theme");
+  try { applyTheme(themeParam || localStorage.getItem("mt-theme") || ""); } catch { applyTheme(themeParam || ""); }
+  $("#themeBtn").addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme");
+    const dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    const next = dark ? "light" : "dark";
+    applyTheme(next); try { localStorage.setItem("mt-theme", next); } catch {}
+    if (last) render(last);
+  });
+
+  // ---------- tooltip ----------
+  function showTip(x, y, rows) {
+    tip.replaceChildren();
+    for (const r of rows) {
+      const line = el("div");
+      if (r.color) line.appendChild(el("span", { class: "key", style: `background:${r.color}` }));
+      line.appendChild(el("span", { class: "v", text: r.v })); line.appendChild(document.createTextNode(" ")); line.appendChild(el("span", { class: "k", text: r.k }));
+      tip.appendChild(line);
+    }
+    tip.style.display = "block";
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.min(x + 12, window.innerWidth - w - 8) + "px";
+    tip.style.top = Math.max(8, y - h - 12) + "px";
+  }
+  const hideTip = () => { tip.style.display = "none"; };
+  document.addEventListener("scroll", hideTip, { passive: true });
+
+  // ---------- table helper ----------
+  function table(container, cols, rows, emptyMsg = "nothing yet") {
+    container.replaceChildren();
+    if (!rows.length) { container.appendChild(el("div", { class: "empty", text: emptyMsg })); return; }
+    const t = el("table"); const thead = el("thead"); const tr = el("tr");
+    for (const c of cols) tr.appendChild(el("th", { class: c.num ? "num" : "", text: c.h }));
+    thead.appendChild(tr); t.appendChild(thead);
+    const tb = el("tbody");
+    for (const r of rows) {
+      const tr2 = el("tr");
+      for (const c of cols) { const td = el("td", { class: c.num ? "num" : "" }); const v = c.f(r); if (v instanceof Node) td.appendChild(v); else td.textContent = v; tr2.appendChild(td); }
+      tb.appendChild(tr2);
+    }
+    t.appendChild(tb); container.appendChild(t);
+  }
+  const signed = (x, d = 4, unit = " SOL") => { const s = el("span", { class: x > 0 ? "pos" : x < 0 ? "neg" : "" }); s.textContent = (x > 0 ? "+" : "") + x.toFixed(d) + unit; return s; };
+  const mintLink = (mint, label) => { const a = el("a", { href: `https://pump.fun/coin/${mint}`, target: "_blank", rel: "noopener", text: label || mint.slice(0, 6) + "…" }); return a; };
+
+  // ---------- chart primitives ----------
+  const M = { t: 10, r: 14, b: 26, l: 44 };
+  function frame(host, w, h) {
+    host.replaceChildren();
+    const svg = el("svg", { viewBox: `0 0 ${w} ${h}`, role: "img" }, SVG);
+    host.appendChild(svg);
+    return svg;
+  }
+  function niceTicks(min, max, n = 4) {
+    if (!(max > min)) { max = min + 1; }
+    const span = max - min, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+    const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => span / s <= n) || mag * 10;
+    const lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step;
+    const ticks = []; for (let v = lo; v <= hi + step / 2; v += step) ticks.push(+v.toFixed(10));
+    return { lo, hi, ticks };
+  }
+  function yAxis(svg, lo, hi, ticks, x0, x1, y, fmt) {
+    for (const t of ticks) {
+      const yy = y(t);
+      svg.appendChild(el("line", { x1: x0, x2: x1, y1: yy, y2: yy, stroke: css("--grid"), "stroke-width": 1 }, SVG));
+      svg.appendChild(el("text", { x: x0 - 6, y: yy + 4, "text-anchor": "end", "font-size": 11, fill: css("--muted"), style: "font-variant-numeric: tabular-nums", text: fmt(t) }, SVG));
+    }
+  }
+
+  /** Single-series line with area wash, crosshair + tooltip. pts: [{x: ts, y, label}] */
+  function lineChart(host, pts, { yFmt = (v) => v.toFixed(3), yLabel = "", xFmt = fmtTime, zeroLine = true } = {}) {
+    const w = 560, h = 220;
+    const svg = frame(host, w, h);
+    if (pts.length < 1) { host.appendChild(el("div", { class: "empty", text: "no closed positions in this window" })); return; }
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    const xmin = Math.min(...xs), xmax = Math.max(...xs);
+    const yr = niceTicks(Math.min(0, ...ys), Math.max(0, ...ys));
+    const x = (v) => M.l + (xmax > xmin ? ((v - xmin) / (xmax - xmin)) * (w - M.l - M.r) : (w - M.l - M.r) / 2);
+    const y = (v) => h - M.b - ((v - yr.lo) / (yr.hi - yr.lo)) * (h - M.t - M.b);
+    yAxis(svg, yr.lo, yr.hi, yr.ticks, M.l, w - M.r, y, yFmt);
+    if (zeroLine && yr.lo < 0 && yr.hi > 0) svg.appendChild(el("line", { x1: M.l, x2: w - M.r, y1: y(0), y2: y(0), stroke: css("--axis"), "stroke-width": 1 }, SVG));
+    const d = pts.map((p, i) => `${i ? "L" : "M"}${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`).join(" ");
+    const base = y(Math.max(yr.lo, Math.min(0, yr.hi)));
+    svg.appendChild(el("path", { d: `${d} L${x(xmax).toFixed(1)},${base} L${x(xmin).toFixed(1)},${base} Z`, fill: css("--s1"), "fill-opacity": 0.1 }, SVG));
+    svg.appendChild(el("path", { d, fill: "none", stroke: css("--s1"), "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, SVG));
+    const lastP = pts[pts.length - 1];
+    svg.appendChild(el("circle", { cx: x(lastP.x), cy: y(lastP.y), r: 5, fill: css("--s1"), stroke: css("--ring"), "stroke-width": 2 }, SVG));
+    svg.appendChild(el("text", { x: Math.min(x(lastP.x) + 8, w - 40), y: y(lastP.y) + 4, "font-size": 11, fill: css("--ink-2"), text: yFmt(lastP.y) }, SVG));
+    // x labels (deduplicated)
+    const n = Math.min(5, pts.length);
+    let prevLabel = null;
+    for (let i = 0; i < n; i++) {
+      const p = pts[Math.round((i * (pts.length - 1)) / Math.max(1, n - 1))]; const t = xFmt(p.x);
+      if (t === prevLabel) continue; prevLabel = t;
+      svg.appendChild(el("text", { x: x(p.x), y: h - 8, "text-anchor": "middle", "font-size": 11, fill: css("--muted"), text: t }, SVG));
+    }
+    // crosshair
+    const cross = el("line", { y1: M.t, y2: h - M.b, stroke: css("--axis"), "stroke-width": 1, visibility: "hidden" }, SVG); svg.appendChild(cross);
+    const dot = el("circle", { r: 5, fill: css("--s1"), stroke: css("--ring"), "stroke-width": 2, visibility: "hidden" }, SVG); svg.appendChild(dot);
+    const hit = el("rect", { x: M.l, y: M.t, width: w - M.l - M.r, height: h - M.t - M.b, fill: "transparent" }, SVG); svg.appendChild(hit);
+    const move = (ev) => {
+      const r = svg.getBoundingClientRect(); const px = ((ev.clientX - r.left) / r.width) * w;
+      let best = 0, bd = Infinity; pts.forEach((p, i) => { const dd = Math.abs(x(p.x) - px); if (dd < bd) { bd = dd; best = i; } });
+      const p = pts[best];
+      cross.setAttribute("x1", x(p.x)); cross.setAttribute("x2", x(p.x)); cross.setAttribute("visibility", "visible");
+      dot.setAttribute("cx", x(p.x)); dot.setAttribute("cy", y(p.y)); dot.setAttribute("visibility", "visible");
+      showTip(ev.clientX, ev.clientY, [{ v: yFmt(p.y), k: yLabel, color: css("--s1") }, { v: p.label || "", k: fmtDT(p.x) }]);
+    };
+    hit.addEventListener("pointermove", move); hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); hideTip(); });
+  }
+
+  /** Vertical columns, single hue, optional second series drawn as thinner overlay? No: single series only. */
+  function columns(host, bins, { value = (b) => b.count, label = (b) => b.label, tipLabel = "count", threshold = null, xEvery = 1, maxBar = 24 } = {}) {
+    const w = 560, h = 200;
+    const svg = frame(host, w, h);
+    if (!bins.length || bins.every((b) => value(b) === 0)) { host.appendChild(el("div", { class: "empty", text: "nothing in this window" })); return; }
+    const vals = bins.map(value);
+    const yr = niceTicks(0, Math.max(...vals));
+    const y = (v) => h - M.b - (v / yr.hi) * (h - M.t - M.b);
+    yAxis(svg, 0, yr.hi, yr.ticks, M.l, w - M.r, y, (v) => String(v));
+    const band = (w - M.l - M.r) / bins.length;
+    const bw = Math.min(maxBar, Math.max(3, band - 2));
+    bins.forEach((b, i) => {
+      const v = value(b); const cx = M.l + band * i + band / 2; const top = y(v); const bh = Math.max(0, h - M.b - top);
+      const rr = Math.min(4, bh);
+      const path = bh > 0 ? `M${(cx - bw / 2).toFixed(1)},${h - M.b} V${(top + rr).toFixed(1)} a${rr},${rr} 0 0 1 ${rr},-${rr} H${(cx + bw / 2 - rr).toFixed(1)} a${rr},${rr} 0 0 1 ${rr},${rr} V${h - M.b} Z` : "";
+      const bar = el("path", { d: path, fill: css("--s1") }, SVG); svg.appendChild(bar);
+      if (i % xEvery === 0) svg.appendChild(el("text", { x: cx, y: h - 8, "text-anchor": "middle", "font-size": 10.5, fill: css("--muted"), text: label(b) }, SVG));
+      const hit = el("rect", { x: M.l + band * i, y: M.t, width: band, height: h - M.t - M.b, fill: "transparent" }, SVG);
+      hit.addEventListener("pointermove", (ev) => { bar.setAttribute("fill-opacity", 0.75); showTip(ev.clientX, ev.clientY, [{ v: String(v), k: tipLabel, color: css("--s1") }, { v: label(b), k: b.sub || "" }]); });
+      hit.addEventListener("pointerleave", () => { bar.removeAttribute("fill-opacity"); hideTip(); });
+      svg.appendChild(hit);
+    });
+    if (threshold !== null) {
+      const i = bins.findIndex((b) => b.from !== undefined && b.from >= threshold);
+      if (i >= 0) { const xx = M.l + band * i; svg.appendChild(el("line", { x1: xx, x2: xx, y1: M.t, y2: h - M.b, stroke: css("--ink-2"), "stroke-width": 1 }, SVG)); svg.appendChild(el("text", { x: xx + 4, y: M.t + 10, "font-size": 10.5, fill: css("--ink-2"), text: `buy ≥ ${threshold}` }, SVG)); }
+    }
+  }
+
+  /** Horizontal bars, single hue, label at tip. rows: [{label, value}] */
+  function barsH(host, rows, { tipLabel = "launches" } = {}) {
+    const rowH = 24, w = 560, lw = 170;
+    const h = Math.max(60, rows.length * rowH + 10);
+    const svg = frame(host, w, h);
+    if (!rows.length) { host.appendChild(el("div", { class: "empty", text: "nothing in this window" })); return; }
+    const max = Math.max(...rows.map((r) => r.value)) || 1;
+    const x = (v) => lw + (v / max) * (w - lw - 50);
+    rows.forEach((r, i) => {
+      const yy = 5 + i * rowH, bh = 14;
+      svg.appendChild(el("text", { x: lw - 8, y: yy + bh - 3, "text-anchor": "end", "font-size": 11.5, fill: css("--ink-2"), text: r.label.length > 26 ? r.label.slice(0, 25) + "…" : r.label }, SVG));
+      const x1 = x(r.value), rr = Math.min(4, x1 - lw);
+      const d = `M${lw},${yy} H${(x1 - rr).toFixed(1)} a${rr},${rr} 0 0 1 ${rr},${rr} V${yy + bh - rr} a${rr},${rr} 0 0 1 -${rr},${rr} H${lw} Z`;
+      const bar = el("path", { d, fill: css("--s1") }, SVG); svg.appendChild(bar);
+      svg.appendChild(el("text", { x: x1 + 6, y: yy + bh - 3, "font-size": 11, fill: css("--ink-2"), style: "font-variant-numeric: tabular-nums", text: String(r.value) }, SVG));
+      const hit = el("rect", { x: 0, y: yy - 4, width: w, height: rowH, fill: "transparent" }, SVG);
+      hit.addEventListener("pointermove", (ev) => { bar.setAttribute("fill-opacity", 0.75); showTip(ev.clientX, ev.clientY, [{ v: String(r.value), k: tipLabel, color: css("--s1") }, { v: r.label, k: "" }]); });
+      hit.addEventListener("pointerleave", () => { bar.removeAttribute("fill-opacity"); hideTip(); });
+      svg.appendChild(hit);
+    });
+  }
+
+  /** One horizontal part-to-whole bar built from flex segments (crisp at any width); segs: [{label, value, color, ink}] */
+  function funnelBar(host, legendHost, segs) {
+    host.replaceChildren();
+    const total = segs.reduce((a, s) => a + s.value, 0);
+    legendHost.replaceChildren();
+    if (!total) { host.appendChild(el("div", { class: "empty", text: "no launches in this window" })); return; }
+    const row = el("div", { class: "funnel", role: "img", "aria-label": segs.map((s) => `${s.label}: ${s.value}`).join(", ") });
+    const labels = [];
+    for (const s of segs) {
+      if (!s.value) continue;
+      const pct = (s.value / total) * 100;
+      const seg = el("div", { class: "seg", style: `flex: ${s.value} ${s.value} 0; background:${s.color}; color:${s.ink || "#fff"}`, tabindex: "0" });
+      const lab = el("span", { class: "seglabel", text: `${s.value} · ${pct.toFixed(0)}%` });
+      seg.appendChild(lab); labels.push([seg, lab]);
+      const show = (x, y) => showTip(x, y, [{ v: `${s.value} (${pct.toFixed(1)}%)`, k: s.label, color: s.color }]);
+      seg.addEventListener("pointermove", (ev) => { seg.style.opacity = 0.8; show(ev.clientX, ev.clientY); });
+      seg.addEventListener("pointerleave", () => { seg.style.opacity = ""; hideTip(); });
+      seg.addEventListener("focus", () => { const r = seg.getBoundingClientRect(); show(r.left + r.width / 2, r.top); });
+      seg.addEventListener("blur", hideTip);
+      row.appendChild(seg);
+    }
+    host.appendChild(row);
+    requestAnimationFrame(() => { for (const [seg, lab] of labels) if (lab.scrollWidth + 14 > seg.clientWidth) lab.style.visibility = "hidden"; });
+    for (const s of segs) { const li = el("span"); li.appendChild(el("span", { class: "sw", style: `background:${s.color}` })); li.appendChild(document.createTextNode(`${s.label}: ${s.value}`)); legendHost.appendChild(li); }
+  }
+
+  /** (SVG variant kept for reference; the funnel uses funnelBar) */
+  function stackedBar(host, legendHost, segs) {
+    const w = 900, h = 44, bh = 22;
+    const svg = frame(host, w, h);
+    const total = segs.reduce((a, s) => a + s.value, 0);
+    if (!total) { host.appendChild(el("div", { class: "empty", text: "no launches in this window" })); legendHost.replaceChildren(); return; }
+    let x0 = 0;
+    segs.forEach((s, i) => {
+      const sw = (s.value / total) * w; const gap = i < segs.length - 1 && s.value ? 2 : 0;
+      const rect = el("rect", { x: x0, y: 8, width: Math.max(0, sw - gap), height: bh, fill: s.color, rx: i === 0 || i === segs.length - 1 ? 4 : 0 }, SVG);
+      svg.appendChild(rect);
+      const pct = ((s.value / total) * 100).toFixed(0) + "%";
+      const txt = `${s.value} · ${pct}`;
+      if (sw > txt.length * 7 + 12) svg.appendChild(el("text", { x: x0 + 8, y: 8 + bh - 7, "font-size": 11.5, fill: "#ffffff", text: txt }, SVG));
+      const hit = el("rect", { x: x0, y: 0, width: Math.max(sw, 6), height: h, fill: "transparent" }, SVG);
+      hit.addEventListener("pointermove", (ev) => { rect.setAttribute("fill-opacity", 0.8); showTip(ev.clientX, ev.clientY, [{ v: `${s.value} (${pct})`, k: s.label, color: s.color }]); });
+      hit.addEventListener("pointerleave", () => { rect.removeAttribute("fill-opacity"); hideTip(); });
+      svg.appendChild(hit);
+      x0 += sw;
+    });
+    legendHost.replaceChildren();
+    for (const s of segs) { const li = el("span"); li.appendChild(el("span", { class: "sw", style: `background:${s.color}` })); li.appendChild(document.createTextNode(`${s.label}: ${s.value}`)); legendHost.appendChild(li); }
+  }
+
+  function sparkline(pts, w = 120, h = 28) {
+    const svg = el("svg", { viewBox: `0 0 ${w} ${h}`, width: w, height: h }, SVG);
+    if (pts.length < 2) return svg;
+    const ys = pts.map((p) => p.y), min = Math.min(...ys), max = Math.max(...ys);
+    const x = (i) => (i / (pts.length - 1)) * (w - 4) + 2, y = (v) => (max > min ? h - 3 - ((v - min) / (max - min)) * (h - 6) : h / 2);
+    svg.appendChild(el("path", { d: pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.y).toFixed(1)}`).join(" "), fill: "none", stroke: css("--gray"), "stroke-width": 2, "stroke-linejoin": "round" }, SVG));
+    const lp = pts[pts.length - 1];
+    svg.appendChild(el("circle", { cx: x(pts.length - 1), cy: y(lp.y), r: 4, fill: css("--s1"), stroke: css("--ring"), "stroke-width": 2 }, SVG));
+    return svg;
+  }
+
+  // ---------- table toggles ----------
+  for (const btn of document.querySelectorAll(".tbl-toggle")) btn.addEventListener("click", () => { const fig = btn.closest("figure"); fig.classList.toggle("table"); btn.textContent = fig.classList.contains("table") ? "chart" : "table"; });
+
+  // ---------- render ----------
+  let last = null;
+  function render(s) {
+    last = s;
+    const modePill = $("#modePill"); modePill.className = "pill " + (s.mode === "live" ? "warn" : "on"); modePill.lastElementChild.textContent = s.mode === "live" ? "LIVE trading" : "paper mode";
+    const alive = $("#alivePill"); alive.className = "pill " + (s.alive ? "on" : "off"); alive.lastElementChild.textContent = s.alive ? `bot running · log ${ago(s.lastLogAt)}` : s.lastLogAt ? `bot silent · last log ${ago(s.lastLogAt)}` : "no log yet";
+    const kill = $("#killPill"); kill.hidden = s.kill === "none"; kill.className = "pill off"; kill.lastElementChild.textContent = `kill switch: ${s.kill}`;
+    $("#statusLine").textContent = s.lastStatus ? s.lastStatus.replace(/^.*status \| /, "") : "";
+    $("#updatedAt").textContent = `updated ${new Date(s.generatedAt).toLocaleTimeString()}`;
+    $("#bucketLabel").textContent = `per ${s.bucketMs >= 3600000 ? (s.bucketMs / 3600000) + "h" : (s.bucketMs / 60000) + " min"}`;
+    $("#minScoreLabel").textContent = `buy threshold MIN_SCORE=${s.minScore}; hard fails still apply`;
+
+    // KPIs
+    const k = $("#kpis"); k.replaceChildren();
+    const b = s.balance;
+    const tile = (label, value, { hero = false, delta = null, deltaClass = "", spark = null, unit = null } = {}) => {
+      const t = el("div", { class: "tile" + (hero ? " hero" : "") });
+      t.appendChild(el("div", { class: "label", text: label }));
+      const v = el("div", { class: "value", text: value }); if (unit) v.appendChild(el("span", { class: "unit", text: unit })); t.appendChild(v);
+      if (delta !== null) t.appendChild(el("div", { class: "delta " + deltaClass, text: delta }));
+      if (spark) t.appendChild(spark);
+      k.appendChild(t);
+    };
+    if (b.paperSol !== null) {
+      const d = b.paperStartSol === null ? null : b.paperSol - b.paperStartSol;
+      tile("Paper balance", b.paperSol.toFixed(3), { hero: true, unit: "SOL", delta: d === null ? "no fills yet" : `${d >= 0 ? "+" : ""}${d.toFixed(4)} SOL since start (${b.paperStartSol.toFixed(2)})`, deltaClass: d === null ? "" : d > 0 ? "up" : d < 0 ? "down" : "", spark: sparkline(s.equity.map((e) => ({ y: e.cash }))) });
+    } else tile("Realized PnL, all time", fmtSol(b.realizedPnlSol), { hero: true, deltaClass: b.realizedPnlSol >= 0 ? "up" : "down" });
+    const sgn = (x, d = 4) => (x > 0 ? "+" : "") + x.toFixed(d);
+    tile("Realized PnL, all time", sgn(b.realizedPnlSol), { unit: "SOL", delta: `${b.closedCount} closed · win rate ${b.winRate === null ? "—" : b.winRate + "%"}`, deltaClass: b.realizedPnlSol > 0 ? "up" : b.realizedPnlSol < 0 ? "down" : "" });
+    tile("PnL in window", sgn(b.windowPnlSol), { unit: "SOL", delta: `${b.closedInWindow} closed · today ${sgn(b.todayPnlSol)} SOL`, deltaClass: b.windowPnlSol > 0 ? "up" : b.windowPnlSol < 0 ? "down" : "" });
+    tile("Open positions", String(b.openCount), { delta: `${b.consecutiveLosses} consecutive losses` });
+    tile("Launches in window", String(s.funnel.total), { delta: `${s.funnel.observed} observed · ${s.funnel.bought} bought` });
+    tile("Skipped that went 2x+", s.shadow.pctAbove2x === null ? "—" : s.shadow.pctAbove2x + "%", { delta: `${s.shadow.withOutcome} tracked · median ${s.shadow.medianEndMult === null ? "—" : s.shadow.medianEndMult + "x"}` });
+
+    // PnL curve
+    const pnlFig = $("#fig-pnl");
+    lineChart($(".plot", pnlFig), s.pnlCurve.map((p) => ({ x: p.ts, y: p.cum })), { yFmt: (v) => v.toFixed(3), yLabel: "cumulative SOL", xFmt: s.windowHours > 24 ? fmtDT : fmtTime });
+    table($(".tbl-view", pnlFig), [{ h: "time", f: (r) => fmtDT(r.ts) }, { h: "cumulative SOL", num: true, f: (r) => r.cum.toFixed(4) }], s.pnlCurve);
+
+    // launches per bucket
+    const lf = $("#fig-launches");
+    const lab = (bk) => (s.bucketMs >= 6 * 3600000 ? fmtDT(bk.ts) : fmtTime(bk.ts));
+    columns($(".plot", lf), s.perBucket.map((bk) => ({ ...bk, label: lab(bk), sub: `${bk.observed} observed · ${bk.bought} bought` })), { value: (bk) => bk.launches, tipLabel: "launches", xEvery: Math.max(1, Math.ceil(s.perBucket.length / 8)), maxBar: 18 });
+    $(".legend", lf).replaceChildren();
+    table($(".tbl-view", lf), [{ h: "bucket", f: (r) => fmtDT(r.ts) }, { h: "launches", num: true, f: (r) => String(r.launches) }, { h: "observed", num: true, f: (r) => String(r.observed) }, { h: "bought", num: true, f: (r) => String(r.bought) }], s.perBucket);
+
+    // funnel
+    const ff = $("#fig-funnel");
+    const segs = [
+      { label: "rejected before observation", value: s.funnel.prefiltered, color: css("--gray"), ink: css("--ink") },
+      { label: "observed then skipped", value: s.funnel.skippedAfterObservation, color: css("--s1") },
+      { label: "bought", value: s.funnel.bought, color: css("--s3") },
+    ];
+    funnelBar($(".plot", ff), $(".legend", ff), segs);
+    table($(".tbl-view", ff), [{ h: "stage", f: (r) => r.label }, { h: "launches", num: true, f: (r) => String(r.value) }], segs);
+
+    // reasons
+    const rf = $("#fig-reasons");
+    barsH($(".plot", rf), s.skipReasons.map((r) => ({ label: r.reason, value: r.count })));
+    table($(".tbl-view", rf), [{ h: "reason", f: (r) => r.reason }, { h: "count", num: true, f: (r) => String(r.count) }], s.skipReasons);
+
+    // scores
+    const sf = $("#fig-scores");
+    columns($(".plot", sf), s.scoreBins, { threshold: s.minScore, tipLabel: "launches" });
+    table($(".tbl-view", sf), [{ h: "score", f: (r) => r.label }, { h: "launches", num: true, f: (r) => String(r.count) }], s.scoreBins);
+
+    // shadow
+    const shf = $("#fig-shadow");
+    columns($(".plot", shf), s.shadow.bins, { tipLabel: "skipped launches" });
+    table($(".tbl-view", shf), [{ h: "outcome", f: (r) => r.label }, { h: "launches", num: true, f: (r) => String(r.count) }], s.shadow.bins);
+    $("#shadowSub").textContent = `${s.shadow.withOutcome} skipped launches with an outcome · x = market cap at end of shadow window ÷ at decision`;
+
+    // missed / dodged
+    const mt = $("#missedTables"); mt.replaceChildren();
+    const cols = [{ h: "token", f: (r) => mintLink(r.mint, r.symbol || r.mint.slice(0, 6)) }, { h: "did", num: true, f: (r) => r.endMult.toFixed(2) + "x" }, { h: "score", num: true, f: (r) => (r.score === null ? "—" : String(r.score)) }, { h: "skip reason", f: (r) => r.reason }, { h: "when", f: (r) => ago(r.ts) }];
+    const block = (title, rows) => { const w = el("div"); w.appendChild(el("div", { class: "sub", text: title, style: "margin-bottom:4px" })); const d = el("div", { class: "table-wrap" }); w.appendChild(d); table(d, cols, rows, "no outcomes yet"); mt.appendChild(w); };
+    block("Misses (highest multiple after we skipped)", s.shadow.missed);
+    block("Dodges (lowest multiple after we skipped)", s.shadow.dodged);
+
+    // open positions
+    $("#openSub").textContent = s.open.length ? `${s.open.length} open` : "none open";
+    table($("#openTable"), [
+      { h: "token", f: (r) => mintLink(r.mint, r.symbol) }, { h: "strategy", f: (r) => r.strategy }, { h: "age", f: (r) => fmtDur(Math.round((Date.now() - r.openedAt) / 1000)) },
+      { h: "now vs entry", num: true, f: (r) => signed((r.mult - 1) * 100, 1, "%") }, { h: "tokens", num: true, f: (r) => r.tokens.toLocaleString() },
+      { h: "cost", num: true, f: (r) => r.costSol.toFixed(4) }, { h: "taken out", num: true, f: (r) => r.proceedsSol.toFixed(4) },
+      { h: "venue", f: (r) => r.venue }, { h: "ladder", f: (r) => `${r.ladderDone} rung${r.ladderDone === 1 ? "" : "s"}${r.trailingArmed ? " · trailing armed" : ""}` },
+    ], s.open, "no open positions");
+
+    // closed
+    table($("#closedTable"), [
+      { h: "closed", f: (r) => fmtDT(r.closedAt) }, { h: "token", f: (r) => mintLink(r.mint, r.symbol) }, { h: "strategy", f: (r) => r.strategy }, { h: "held", f: (r) => fmtDur(r.heldSec) },
+      { h: "pnl", num: true, f: (r) => signed(r.pnlSol, 4) }, { h: "pnl %", num: true, f: (r) => signed(r.pnlPct, 1, "%") }, { h: "exit reasons", f: (r) => r.reasons },
+    ], s.closed, "no closed positions yet");
+
+    // decisions
+    table($("#decisionsTable"), [
+      { h: "time", f: (r) => fmtTime(r.ts) }, { h: "token", f: (r) => mintLink(r.mint, r.symbol || "(no symbol)") },
+      { h: "decision", f: (r) => { const sp = el("span", { class: r.decision === "buy" ? "pos" : "", text: r.decision.toUpperCase() }); return sp; } },
+      { h: "score", num: true, f: (r) => String(r.score) }, { h: "trigger", f: (r) => r.trigger }, { h: "buyers", num: true, f: (r) => (r.buyers === null ? "—" : String(r.buyers)) },
+      { h: "net SOL", num: true, f: (r) => (r.netSol === null ? "—" : r.netSol.toFixed(2)) }, { h: "mcap SOL", num: true, f: (r) => r.mcapSol.toFixed(1) }, { h: "hard fails", f: (r) => r.fails || "—" },
+    ], s.decisions, "no launches scored yet");
+
+    // log
+    const log = $("#log"); log.replaceChildren();
+    for (const line of s.log) { const cls = / ERROR /.test(line) ? "error" : / WARN /.test(line) ? "warn" : /\] (BUY |OPEN |CLOSED )/.test(line) ? "buy" : ""; const sp = el("span", { class: cls, text: line + "\n" }); log.appendChild(sp); }
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // ---------- fetch loop ----------
+  async function refresh() {
+    for (const p of document.querySelectorAll(".plot")) p.classList.add("stale");
+    try {
+      const u = new URL("/api/summary", location.href); u.searchParams.set("hours", String(hours)); if (token) u.searchParams.set("token", token);
+      const res = await fetch(u, { credentials: "same-origin", cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      render(await res.json());
+    } catch (e) {
+      $("#updatedAt").textContent = `refresh failed: ${e.message}`;
+      $("#updatedAt").title = e.stack || "";
+      console.error(e);
+    } finally {
+      for (const p of document.querySelectorAll(".plot")) p.classList.remove("stale");
+    }
+  }
+  for (const btn of document.querySelectorAll(".filters button[data-hours]")) btn.addEventListener("click", () => {
+    hours = Number(btn.dataset.hours);
+    for (const b2 of document.querySelectorAll(".filters button[data-hours]")) b2.setAttribute("aria-pressed", b2 === btn ? "true" : "false");
+    refresh();
+  });
+  const schedule = () => { if (timer) clearInterval(timer); timer = null; if ($("#autoRefresh").checked) timer = setInterval(refresh, 10000); };
+  $("#autoRefresh").addEventListener("change", schedule);
+  refresh(); schedule();
+})();
+</script>
+</body>
+</html>

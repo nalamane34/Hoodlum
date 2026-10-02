@@ -15,7 +15,9 @@
     "keygen": "tsx src/tools/keygen.ts",
     "status": "tsx src/tools/status.ts",
     "panic": "tsx src/tools/panic.ts",
-    "smoke": "tsx src/tools/smoke.ts"
+    "smoke": "tsx src/tools/smoke.ts",
+    "dashboard": "node dist/tools/dashboard.js",
+    "dashboard:dev": "tsx src/tools/dashboard.ts"
   },
   "dependencies": {
     "@pump-fun/pump-sdk": "2.0.0",

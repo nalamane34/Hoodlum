@@ -81,6 +81,36 @@ export class Store {
     }
   }
 
+  /**
+   * Keeps only rows newer than `keepDays` in a JSONL file (by its `tsField`). Runs only when the file is large,
+   * so the bot's disk does not fill up over months (launches.jsonl alone grows ~25 MB/day).
+   */
+  compactJsonl(name: string, keepDays: number, tsField = "ts", minBytes = 20 * 1024 * 1024): void {
+    const file = path.join(this.dataDir, name);
+    try {
+      if (!fs.existsSync(file) || fs.statSync(file).size < minBytes) return;
+      const cutoff = Date.now() - keepDays * 86_400_000;
+      const lines = fs.readFileSync(file, "utf8").split("\n");
+      const kept: string[] = [];
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const row = JSON.parse(line) as Record<string, unknown>;
+          const ts = Number(row[tsField] ?? row.ts ?? 0);
+          if (ts >= cutoff) kept.push(line);
+        } catch {
+          /* drop torn lines */
+        }
+      }
+      const tmp = `${file}.tmp`;
+      fs.writeFileSync(tmp, kept.length ? kept.join("\n") + "\n" : "");
+      fs.renameSync(tmp, file);
+      this.log.info(`compacted ${name}: kept ${kept.length} of ${lines.length} rows (last ${keepDays} days)`);
+    } catch (e) {
+      this.log.warn("jsonl compaction failed", { name, err: errMsg(e) });
+    }
+  }
+
   killSwitch(): KillSwitch {
     const f = path.join(this.dataDir, "KILL");
     if (!fs.existsSync(f)) return "none";

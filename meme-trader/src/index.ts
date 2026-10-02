@@ -159,6 +159,10 @@ async function main(): Promise<void> {
     }
   }, 30_000);
 
+  const compactLoop = setInterval(() => {
+    for (const f of ["launches.jsonl", "shadow_outcomes.jsonl", "copy_signals.jsonl"]) store.compactJsonl(f, cfg.DATA_KEEP_DAYS);
+  }, 60 * 60_000);
+
   const statusLoop = setInterval(() => {
     const open = portfolio.open();
     const pos = open.map((p) => `${p.symbol}:${(p.lastPrice / p.entryPrice).toFixed(2)}x`).join(" ");
@@ -173,6 +177,7 @@ async function main(): Promise<void> {
     clearInterval(ammLoop);
     clearInterval(killLoop);
     clearInterval(pruneLoop);
+    clearInterval(compactLoop);
     clearInterval(statusLoop);
     pump.stop();
     pp?.stop();

@@ -95,6 +95,7 @@ export const ConfigSchema = z.object({
   PAPER_FEE_SOL: num(0.0015),
 
   DATA_DIR: str("./data"),
+  DATA_KEEP_DAYS: num(7),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   STATUS_EVERY_SEC: num(30),
   JUPITER_API_KEY: optStr,

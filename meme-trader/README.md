@@ -65,6 +65,21 @@ journalctl -u meme-trader -f
 
 The service restarts on crash and on reboot, stops cleanly with SIGINT so state is flushed, and open positions resume on the next start. Edit `.env` then `sudo systemctl restart meme-trader` to apply changes. `t3.small` / `t4g.small` is plenty; inbound bandwidth (all the bot uses) is free on AWS. Lock the security group to SSH from your IP only and keep `.env` at mode 600: whoever can read it owns the wallet.
 
+## Dashboard
+
+A read-only page served from the bot's data directory: balance and PnL tiles, cumulative realized PnL, launches per hour, the decision funnel, skip reasons, score distribution, what skipped launches did afterwards (misses and dodges), open and closed positions, the latest decisions and the log tail. Window filter (1h / 6h / 24h / 7d), hover tooltips, a table view for every chart, light and dark themes.
+
+```bash
+npm run dashboard          # http://127.0.0.1:8787/ by default
+```
+
+On a server the deploy script installs it as `meme-trader-dashboard`. Two ways to reach it:
+
+- Tunnel (nothing exposed): `ssh -i YOUR.pem -L 8787:127.0.0.1:8787 ubuntu@SERVER_IP`, then open http://localhost:8787/ while that SSH session is open.
+- Public with a token: set `DASHBOARD_HOST=0.0.0.0` in `.env` (the setup script already generated `DASHBOARD_TOKEN`), open port 8787 in the security group (your IP only is best), `sudo systemctl restart meme-trader-dashboard`, then open `http://SERVER_IP:8787/?token=YOUR_TOKEN` once; a cookie keeps you signed in.
+
+The dashboard only reads files; it cannot trade or change settings.
+
 ## Configuration
 
 Everything lives in `.env`; `.env.example` documents each setting. The important groups:
