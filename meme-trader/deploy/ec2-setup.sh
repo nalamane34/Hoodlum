@@ -9,6 +9,7 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE="meme-trader"
 RUN_USER="${SUDO_USER:-$USER}"
 
+sudo apt-get update -y -qq
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -v | sed 's/^v//' | cut -d. -f1)" -lt 22 ]]; then
   echo "installing Node.js 22..."
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
