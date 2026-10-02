@@ -26,5 +26,8 @@ describe("config", () => {
     const c = loadConfig({ SENDER: "helius", TIP_SOL_MIN: "0.0001", TIP_SOL_MAX: "0.0002" });
     expect(c.TIP_SOL_MIN).toBe(0.001);
     expect(c.TIP_SOL_MAX).toBe(0.001);
+    const s = loadConfig({ SENDER: "helius", HELIUS_SWQOS_ONLY: "true", TIP_SOL_MIN: "0.000001", TIP_SOL_MAX: "0.002" });
+    expect(s.TIP_SOL_MIN).toBe(0.000005);
+    expect(s.TIP_SOL_MAX).toBe(0.002);
   });
 });

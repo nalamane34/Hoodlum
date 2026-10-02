@@ -27,6 +27,7 @@ export const ConfigSchema = z.object({
   SENDER: z.enum(["rpc", "jito", "helius"]).default("rpc"),
   JITO_URL: str("https://mainnet.block-engine.jito.wtf"),
   HELIUS_SENDER_URL: str("https://sender.helius-rpc.com/fast"),
+  HELIUS_SWQOS_ONLY: bool.default(false),
   TIP_SOL_MIN: num(0.0005),
   TIP_SOL_MAX: num(0.003),
   PRIORITY_FEE_MODE: z.enum(["auto", "fixed"]).default("auto"),
@@ -167,9 +168,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error("TRADE_FEED=watched only streams trades for tokens we already know about; add pumpportal (or grpc) to FEEDS for launches, or set TRADE_FEED=firehose");
   }
   if (raw.MODE === "live" && !raw.WALLET_SECRET_KEY) throw new Error("MODE=live requires WALLET_SECRET_KEY");
-  if (raw.SENDER === "helius" && raw.TIP_SOL_MIN < 0.001) {
-    raw.TIP_SOL_MIN = 0.001;
-    if (raw.TIP_SOL_MAX < 0.001) raw.TIP_SOL_MAX = 0.001;
+  if (raw.SENDER === "helius") {
+    // Helius Sender enforces a minimum tip: 0.001 SOL on all pathways, 0.000005 SOL in SWQoS-only mode.
+    const minTip = raw.HELIUS_SWQOS_ONLY ? 0.000005 : 0.001;
+    if (raw.TIP_SOL_MIN < minTip) raw.TIP_SOL_MIN = minTip;
+    if (raw.TIP_SOL_MAX < raw.TIP_SOL_MIN) raw.TIP_SOL_MAX = raw.TIP_SOL_MIN;
   }
   const exits: ExitConfig = {
     ladder: parseLadder(raw.TP_LADDER),

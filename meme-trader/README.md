@@ -51,6 +51,20 @@ npm run panic -- --liquidate  # also sell everything now
 npm run panic -- --clear      # resume
 ```
 
+## Running on a server (EC2 or any Ubuntu VPS)
+
+```bash
+git clone -b meme-trader https://github.com/nalamane34/Hoodlum.git
+cd Hoodlum/meme-trader
+bash deploy/ec2-setup.sh        # installs Node 22, builds, creates .env, installs a systemd service
+nano .env                       # RPC_URL (e.g. https://mainnet.helius-rpc.com/?api-key=...), risk limits
+npm run smoke
+sudo systemctl start meme-trader
+journalctl -u meme-trader -f
+```
+
+The service restarts on crash and on reboot, stops cleanly with SIGINT so state is flushed, and open positions resume on the next start. Edit `.env` then `sudo systemctl restart meme-trader` to apply changes. `t3.small` / `t4g.small` is plenty; inbound bandwidth (all the bot uses) is free on AWS. Lock the security group to SSH from your IP only and keep `.env` at mode 600: whoever can read it owns the wallet.
+
 ## Configuration
 
 Everything lives in `.env`; `.env.example` documents each setting. The important groups:

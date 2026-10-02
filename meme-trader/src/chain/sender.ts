@@ -102,7 +102,8 @@ export class Sender {
       await this.conn.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0, preflightCommitment: "processed" });
       return;
     }
-    const url = this.cfg.SENDER === "jito" ? `${this.cfg.JITO_URL.replace(/\/$/, "")}/api/v1/transactions` : this.cfg.HELIUS_SENDER_URL;
+    const heliusUrl = this.cfg.HELIUS_SWQOS_ONLY ? `${this.cfg.HELIUS_SENDER_URL}${this.cfg.HELIUS_SENDER_URL.includes("?") ? "&" : "?"}swqos_only=true` : this.cfg.HELIUS_SENDER_URL;
+    const url = this.cfg.SENDER === "jito" ? `${this.cfg.JITO_URL.replace(/\/$/, "")}/api/v1/transactions` : heliusUrl;
     const body =
       this.cfg.SENDER === "jito"
         ? { jsonrpc: "2.0", id: 1, method: "sendTransaction", params: [b64, { encoding: "base64" }] }

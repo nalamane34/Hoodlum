@@ -5,6 +5,14 @@ import { errMsg, sleep } from "../util.js";
 
 type Notify = (result: unknown) => void;
 
+export function safeUrlLabel(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url.replace(/\?.*$/, "");
+  }
+}
+
 interface Sub {
   method: string;
   params: unknown[];
@@ -29,11 +37,16 @@ export class RpcWs {
   bytesReceived = 0;
   messagesReceived = 0;
 
+  /** host only, so API keys in the query string never reach the logs */
+  private readonly label: string;
+
   constructor(
     private url: string,
     private log: Logger,
     private unsubMethodFor: (method: string) => string = (m) => m.replace(/Subscribe$/, "Unsubscribe"),
-  ) {}
+  ) {
+    this.label = safeUrlLabel(url);
+  }
 
   start(): void {
     this.closed = false;
@@ -41,7 +54,7 @@ export class RpcWs {
     this.heartbeat = setInterval(() => {
       if (!this.ws) return;
       if (Date.now() - this.lastMessage > 45_000) {
-        this.log.warn("ws silent for 45s, reconnecting", { url: this.url });
+        this.log.warn("ws silent for 45s, reconnecting", { url: this.label });
         this.ws.terminate();
       } else if (this.ws.readyState === WebSocket.OPEN) {
         this.ws.ping();
@@ -67,7 +80,7 @@ export class RpcWs {
     ws.on("open", () => {
       this.lastMessage = Date.now();
       this.backoff = 1000;
-      this.log.info("ws connected", { url: this.url, subs: this.subs.size });
+      this.log.info("ws connected", { url: this.label, subs: this.subs.size });
       for (const sub of this.subs.values()) this.sendSubscribe(sub);
     });
     ws.on("message", (data) => {
@@ -78,13 +91,13 @@ export class RpcWs {
       this.onMessage(text);
     });
     ws.on("pong", () => (this.lastMessage = Date.now()));
-    ws.on("error", (e) => this.log.warn("ws error", { url: this.url, err: errMsg(e) }));
+    ws.on("error", (e) => this.log.warn("ws error", { url: this.label, err: errMsg(e) }));
     ws.on("close", async () => {
       this.byServerId.clear();
       for (const p of this.pending.values()) p.reject(new Error("ws closed"));
       this.pending.clear();
       if (this.closed) return;
-      this.log.warn(`ws closed, reconnecting in ${this.backoff}ms`, { url: this.url });
+      this.log.warn(`ws closed, reconnecting in ${this.backoff}ms`, { url: this.label });
       await sleep(this.backoff);
       this.backoff = Math.min(this.backoff * 2, 30_000);
       this.connect();
