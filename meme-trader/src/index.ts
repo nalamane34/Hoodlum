@@ -47,7 +47,7 @@ async function main(): Promise<void> {
   const fees = new FeeOracle(conn, cfg, log.child("fees"), hotAccounts);
   const sender = new Sender(conn, cfg, fees, log.child("send"));
   const jup = new Jupiter(cfg, log.child("jup"));
-  const tracker = new TokenTracker();
+  const tracker = new TokenTracker(600, cfg.PATH_MAX_POINTS);
   const executor = new Executor(cfg, conn, wallet, pump, jup, sender, tracker, store, log.child("exec"));
   const risk = new RiskManager(cfg, store, log.child("risk"));
   const portfolio = new Portfolio(cfg, store, tracker, executor, risk, jup, log.child("pf"));
@@ -137,40 +137,64 @@ async function main(): Promise<void> {
   const pruneLoop = setInterval(() => {
     for (const s of tracker.prune()) {
       void (async () => {
-        // In watched mode the shadow saw ticks only while subscribed; sample the curve now for an end-of-window mark.
-        let mcapAtEnd: number | null = s.shadow.maxMcap > 0 ? +s.shadow.maxMcap.toFixed(2) : null;
-        if (cfg.TRADE_FEED === "watched" && (await limiter.take(500))) {
+        // The last traded price is the curve price, but only if we kept receiving trades. In watched mode, sample the
+        // curve too: it covers trades missed while the websocket reconnected, and is the only end mark for shadows
+        // that were not kept subscribed (null if that sample fails, never a made-up "unchanged").
+        const sawTicks = s.shadow.watched || cfg.TRADE_FEED === "firehose";
+        let mcapAtEnd: number | null = sawTicks && s.shadow.lastMcap > 0 ? +s.shadow.lastMcap.toFixed(2) : null;
+        if (cfg.TRADE_FEED === "watched" && !s.graduated && (await limiter.take(500))) {
           try {
             const { curve } = await pump.fetchCurve(new PublicKey(s.mint), bgConn);
-            mcapAtEnd = +PumpClient.marketCapSol(curve).toFixed(2);
+            const m = PumpClient.marketCapSol(curve);
+            if (Number.isFinite(m) && m > 0) mcapAtEnd = +m.toFixed(2);
           } catch {
             /* token may be gone */
           }
         }
+        const mcapAtDecision = +s.shadow.mcapAtDecision.toFixed(2);
         store.appendJsonl("shadow_outcomes.jsonl", {
           ts: Date.now(),
           mint: s.mint,
           symbol: s.symbol,
           decision: s.shadow.decision,
           reason: s.shadow.reason,
-          mcapAtDecision: +s.shadow.mcapAtDecision.toFixed(2),
+          watched: s.shadow.watched,
+          mcapAtDecision,
           maxMcapSeen: +s.shadow.maxMcap.toFixed(2),
+          minMcapSeen: +s.shadow.minMcap.toFixed(2),
           mcapAtEnd,
           endMult: s.shadow.mcapAtDecision > 0 && mcapAtEnd ? +(mcapAtEnd / s.shadow.mcapAtDecision).toFixed(2) : null,
+          ticksAfter: s.shadow.ticks,
+          graduated: s.graduated || undefined,
         });
+        if (s.path && s.shadow.watched) {
+          store.appendDaily("paths", {
+            ts: Date.now(),
+            mint: s.mint,
+            symbol: s.symbol,
+            decision: s.shadow.decision,
+            reason: s.shadow.reason,
+            firstSeen: s.firstSeen,
+            decisionAt: s.shadow.startedAt,
+            mcapAtDecision,
+            truncated: s.pathTruncated || undefined,
+            points: s.path,
+          });
+        }
       })();
     }
   }, 30_000);
 
   const compactLoop = setInterval(() => {
     for (const f of ["launches.jsonl", "shadow_outcomes.jsonl", "copy_signals.jsonl"]) store.compactJsonl(f, cfg.DATA_KEEP_DAYS);
+    store.pruneDaily("paths", cfg.DATA_KEEP_DAYS);
   }, 60 * 60_000);
 
   const statusLoop = setInterval(() => {
     const open = portfolio.open();
     const pos = open.map((p) => `${p.symbol}:${(p.lastPrice / p.entryPrice).toFixed(2)}x`).join(" ");
     log.info(
-      `status | ${cfg.MODE} | bal ${cfg.live ? "(live)" : store.state.paperSol.toFixed(3)} | today ${risk.dailyPnl().toFixed(4)} SOL | total ${store.state.realizedPnlSol.toFixed(4)} SOL (${store.state.closedCount} closed) | open ${open.length} ${pos} | launches ${launch.stats.launches} observed ${launch.stats.observed} bought ${launch.stats.bought} | feed trades ${rpcLogs?.decodedTrades ?? grpc?.received ?? 0}${rpcLogs && cfg.TRADE_FEED === "watched" ? ` (subs ${rpcLogs.watchedCount})` : ""} | ws ${rpcWs.connected ? `up ${rpcWs.uptimeSec}s` : "DOWN"} ${(rpcWs.bytesReceived / 1e6).toFixed(1)}MB (${rpcWs.messagesReceived} msgs) | pp ${pp?.received ?? 0} | rpc ${rpcHealth?.state ?? "primary"} ${rpcHealth?.primaryRequests ?? 0} req${rpcHealth?.failovers ? ` (${rpcHealth.failovers} via fallback)` : ""} | tracked ${tracker.size} | kill ${store.killSwitch()}`,
+      `status | ${cfg.MODE} | bal ${cfg.live ? "(live)" : store.state.paperSol.toFixed(3)} | today ${risk.dailyPnl().toFixed(4)} SOL | total ${store.state.realizedPnlSol.toFixed(4)} SOL (${store.state.closedCount} closed) | open ${open.length} ${pos} | launches ${launch.stats.launches} observed ${launch.stats.observed} bought ${launch.stats.bought} | feed trades ${rpcLogs?.decodedTrades ?? grpc?.received ?? 0}${rpcLogs && cfg.TRADE_FEED === "watched" ? ` (subs ${rpcLogs.watchedCount})` : ""} | ws ${rpcWs.connected ? `up ${rpcWs.uptimeSec}s` : "DOWN"} ${(rpcWs.bytesReceived / 1e6).toFixed(1)}MB (${rpcWs.messagesReceived} msgs) | pp ${pp?.received ?? 0} | rpc ${rpcHealth?.state ?? "primary"} ${rpcHealth?.primaryRequests ?? 0} req${rpcHealth?.failovers ? ` (${rpcHealth.failovers} via fallback)` : ""} | tracked ${tracker.size} (${tracker.watchedShadowCount()} shadow) | kill ${store.killSwitch()}`,
     );
   }, cfg.STATUS_EVERY_SEC * 1000);
 

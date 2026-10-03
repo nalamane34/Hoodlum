@@ -75,6 +75,12 @@ export const ConfigSchema = z.object({
   SHADOW_TRACK_MINUTES: num(10),
   /** Also track outcomes of launches rejected before observation (mayhem, dev holdings...). Off by default: they are never tradeable, and sampling them costs an RPC call each. */
   SHADOW_PREFILTERED: bool.default(false),
+  /** Skipped launches with at least this many unique buyers stay subscribed for the whole shadow window, so their real peak, trough and end are seen. 0 = drop every skip at once (old behaviour). */
+  SHADOW_WATCH_MIN_BUYERS: num(5),
+  /** Cap on skipped launches kept subscribed at the same time (each is one more websocket subscription). */
+  SHADOW_WATCH_MAX: num(20),
+  /** Trades kept per token in the saved price paths (data/paths/DAY.jsonl). 0 = do not save paths. */
+  PATH_MAX_POINTS: num(4000),
 
   COPY_ENABLED: bool.default(false),
   COPY_WALLETS: str(""),

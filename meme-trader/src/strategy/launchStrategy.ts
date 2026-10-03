@@ -138,14 +138,16 @@ export class LaunchStrategy {
     });
 
     if (finalDecision !== "buy") {
-      this.tracker.shadow(mint, "skip", result.hardFails[0] ?? `score_${result.score}`, this.cfg.SHADOW_TRACK_MINUTES);
+      // Launches with real activity stay subscribed so their outcome is measured, not guessed from one end sample.
+      const keepWatching = this.cfg.SHADOW_WATCH_MIN_BUYERS > 0 && obs.uniqueBuyers >= this.cfg.SHADOW_WATCH_MIN_BUYERS && this.tracker.watchedShadowCount() < this.cfg.SHADOW_WATCH_MAX;
+      this.tracker.shadow(mint, "skip", result.hardFails[0] ?? `score_${result.score}`, this.cfg.SHADOW_TRACK_MINUTES, keepWatching);
       return;
     }
     this.inflight++;
     try {
       const fill = await this.executor.buy({ mint, solAmount: this.cfg.BUY_SOL, tokenProgramHint: ev.tokenProgram, label: ev.symbol, dev: ev.dev, isMayhem: ev.isMayhem, totalSupply: ev.totalSupply });
       if (!fill) {
-        this.tracker.shadow(mint, "failed", "buy_failed", this.cfg.SHADOW_TRACK_MINUTES);
+        this.tracker.shadow(mint, "failed", "buy_failed", this.cfg.SHADOW_TRACK_MINUTES, true);
         return;
       }
       this.stats.bought++;

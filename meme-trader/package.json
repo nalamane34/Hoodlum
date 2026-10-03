@@ -15,6 +15,7 @@
     "keygen": "node dist/tools/keygen.js",
     "status": "node dist/tools/status.js",
     "panic": "node dist/tools/panic.js",
+    "rulecheck": "node dist/tools/rulecheck.js",
     "smoke": "node dist/tools/smoke.js",
     "dashboard": "node dist/tools/dashboard.js",
     "dashboard:dev": "tsx src/tools/dashboard.ts",

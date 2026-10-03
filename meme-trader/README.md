@@ -18,7 +18,7 @@ Yellowstone gRPC (opt.) ──┘        │           CopyStrategy  (mirror cur
                               RiskManager: per-trade size, max positions, daily loss stop, reserve, cooldown, KILL file
 ```
 
-Every scored launch (features, decision, reasons) goes to `data/launches.jsonl`, every fill to `data/fills.jsonl`, every closed position to `data/closed.jsonl`, and every rejected launch is shadow-tracked for 10 minutes so you can see what you skipped (`data/shadow_outcomes.jsonl`). Tune the filters on your own data before risking SOL.
+Every scored launch (features, decision, reasons) goes to `data/launches.jsonl`, every fill to `data/fills.jsonl`, every closed position to `data/closed.jsonl`, and every rejected launch is shadow-tracked for 10 minutes so you can see what you skipped (`data/shadow_outcomes.jsonl`). Skipped launches with real activity (`SHADOW_WATCH_MIN_BUYERS`) stay subscribed for that window, so their peak, trough and end are measured rather than sampled once; their full trade-by-trade price path, and that of every bought token, goes to `data/paths/DAY.jsonl` for replaying entry and exit rules offline. Tune the filters on your own data before risking SOL.
 
 ## Quick start (paper mode, no wallet needed)
 
@@ -166,6 +166,7 @@ npm run smoke      # read-only connectivity + SDK self-test
 npm run keygen     # new bot wallet
 npm run status     # positions and PnL from data/state.json
 npm run panic      # kill switch (see above)
+npm run rulecheck  # fresh-data check of the frozen entry rules (docs/EXPERIMENTS.md)
 npm test           # unit tests (needs dev dependencies: npm ci)
 npm run dev        # run from source without building (tsx); *:dev variants exist for the tools too
 ```

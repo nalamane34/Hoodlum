@@ -22,6 +22,23 @@ every setting.
 - systemd services: `meme-trader` (the bot), `meme-trader-dashboard` (port 8787, loopback only), `meme-trader-agent.timer` (optional jobs runner, see README). Caddy fronts the dashboard on 80/443 once job 006 has run.
 - Update flow on the server: `git pull && npm ci && npm run build && npm prune --omit=dev && sudo systemctl restart meme-trader`. Without SSH: push a `deploy/jobs/NNN-*.sh` and the runner executes it within two minutes; output lands in `data/agent/` and on the dashboard.
 
+## Update, 3 October 2026 (local Claude Code session on the owner's PC)
+
+- Done: the bot runs on the new Helius key (job 005), ports 80/443 are open, job 006 ran and the HTTPS dashboard is live
+  with a valid certificate. The jobs runner (`meme-trader-agent.timer`) is not installed; if it ever is, use
+  `SKIP_JOBS_THROUGH=6`. `DASHBOARD_TOKEN` did not exist before job 006 (job 001 had never run); job 006 created it.
+- Unattended Ubuntu upgrades restart the bot now and then (one at 06:39 UTC); harmless, positions resume.
+- The public websocket drops every few minutes and reconnects within a second; the main feed is unaffected.
+- Paper results at 21:53 UTC: 99 closed, -0.268 SOL. Since the new key: 84 trades, -0.171 SOL; 8 trades reached 2x and
+  earned +0.617, the other 76 lost -0.788. Two loss patterns: dumps that gap straight past the stop loss (-65% exits)
+  and gains of 40% or more given back.
+- Found and fixed: in watched mode, skipped launches were unsubscribed the moment they were skipped, so
+  `shadow_outcomes.jsonl` peaks were never measured (and a failed end sample was logged as "unchanged"). Active skips now
+  stay subscribed, outcomes carry a `watched` flag, and price paths are saved to `data/paths/`. Rows before this change
+  without `watched: true` should not be used for peaks.
+- Experiments in progress: `docs/EXPERIMENTS.md` (three entry rules on fresh trades via `npm run rulecheck`; exit
+  changes once price paths exist). Do not change entry or exit settings before those are decided.
+
 ## State at handoff
 
 - Paper mode since 1 October. After about 20 hours: 15 closed trades, 27% win rate, -0.0975 SOL on a 5 SOL paper balance; exits dominated by dev-sell and whale-dump panics, most of the loss from modelled fees and slippage. The feed was degraded for most of that time (next point), so these numbers are not yet meaningful.

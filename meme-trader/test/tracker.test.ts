@@ -88,4 +88,44 @@ describe("TokenTracker", () => {
     expect(done[0].shadow.maxMcap).toBeGreaterThan(done[0].shadow.mcapAtDecision * 1.9);
     expect(tr.isWatched("M")).toBe(false);
   });
+  it("a watched shadow keeps its subscription, measures peak, trough and end, and returns the price path", async () => {
+    const tr = new TokenTracker(600, 100);
+    const unwatched: string[] = [];
+    tr.on("unwatch", (m: string) => unwatched.push(m));
+    tr.watch("M", launch);
+    tr.onTick(tick({ ts: launch.ts + 500 }));
+    tr.shadow("M", "skip", "test", 0.0001, true);
+    expect(unwatched).toEqual([]);
+    expect(tr.watchedShadowCount()).toBe(1);
+    tr.onTick(tick({ vSol: 62, ts: launch.ts + 2000 }));
+    tr.onTick(tick({ user: "DEV", isBuy: false, vSol: 20, tokens: 50_000_000, sol: 1, ts: launch.ts + 3000 }));
+    await new Promise((r) => setTimeout(r, 20));
+    const [d] = tr.prune();
+    expect(unwatched).toEqual(["M"]);
+    expect(d.shadow.watched).toBe(true);
+    expect(d.shadow.ticks).toBe(2);
+    expect(d.shadow.maxMcap / d.shadow.mcapAtDecision).toBeGreaterThan(1.9);
+    expect(d.shadow.minMcap).toBeCloseTo(d.shadow.lastMcap, 6);
+    expect(d.shadow.lastMcap).toBeLessThan(d.shadow.mcapAtDecision);
+    expect(d.path).toHaveLength(3); // the trade before the decision and both after it
+    expect(d.path![0][0]).toBe(500);
+    expect(d.path![2]).toEqual([3000, expect.any(Number), -1, 5, 1]);
+    expect(d.pathTruncated).toBe(false);
+  });
+  it("caps the price path and drops it for shadows that are not kept subscribed", () => {
+    const tr = new TokenTracker(600, 2);
+    tr.watch("M", launch);
+    for (let i = 0; i < 4; i++) tr.onTick(tick({ ts: launch.ts + i }));
+    expect(tr.get("M")!.path).toHaveLength(2);
+    expect(tr.get("M")!.pathTruncated).toBe(true);
+    tr.shadow("M", "skip", "test", 1);
+    expect(tr.get("M")!.path).toBeUndefined();
+    expect(tr.watchedShadowCount()).toBe(0);
+  });
+  it("saves no path when path saving is off", () => {
+    const tr = new TokenTracker();
+    tr.watch("M", launch);
+    tr.onTick(tick({}));
+    expect(tr.get("M")!.path).toBeUndefined();
+  });
 });

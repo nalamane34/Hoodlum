@@ -30,9 +30,44 @@ export interface TokenState {
   /** null until the first trade reveals the quote mint */
   solQuoted: boolean | null;
   /** present while we are only tracking the token to learn what it did */
-  shadow?: { decision: "skip" | "buy" | "failed"; mcapAtDecision: number; maxMcap: number; minMcap: number; until: number; reason: string };
+  shadow?: ShadowState;
   pinned: boolean; // held position: never auto-pruned
+  /** every trade since launch, for replaying entry and exit rules offline (only when path saving is on) */
+  path?: PathPoint[];
+  pathTruncated?: boolean;
 }
+
+export interface ShadowState {
+  decision: "skip" | "buy" | "failed";
+  reason: string;
+  startedAt: number;
+  until: number;
+  /** still subscribed, so max/min/last are real; otherwise only firehose ticks (if any) update them */
+  watched: boolean;
+  mcapAtDecision: number;
+  maxMcap: number;
+  minMcap: number;
+  lastMcap: number;
+  ticks: number;
+}
+
+/** One trade: ms since the token was first seen, market cap in SOL after it, SOL in (+) or out (-), % of supply traded, 1 if the dev traded. */
+export type PathPoint = [dtMs: number, mcapSol: number, sol: number, pctSupply: number, dev: 0 | 1];
+
+export interface FinishedShadow {
+  mint: string;
+  symbol: string;
+  firstSeen: number;
+  graduated: boolean;
+  shadow: ShadowState;
+  path?: PathPoint[];
+  pathTruncated: boolean;
+}
+
+const round = (x: number, d: number): number => {
+  const f = 10 ** d;
+  return Math.round(x * f) / f;
+};
 
 export interface Observation {
   ageMs: number;
@@ -64,7 +99,10 @@ export class TokenTracker extends EventEmitter {
   private launchTs = new Map<string, number>(); // every launch seen (for token age), pruned
   private earlyBuyers = new Map<string, { mints: Set<string>; at: number }>();
 
-  constructor(private maxTicks = 600) {
+  constructor(
+    private maxTicks = 600,
+    private pathMaxPoints = 0,
+  ) {
     super();
   }
 
@@ -111,6 +149,7 @@ export class TokenTracker extends EventEmitter {
         recentSells: [],
         solQuoted: launch ? (launch.source === "pumpportal" ? null : launch.solQuoted) : null,
         pinned: false,
+        path: this.pathMaxPoints > 0 ? [] : undefined,
       };
       if (launch && launch.initialBuyTokens > 0) st.holdings.set(launch.dev, launch.initialBuyTokens);
       this.tokens.set(mint, st);
@@ -134,17 +173,32 @@ export class TokenTracker extends EventEmitter {
     if (st) st.pinned = pinned;
   }
 
-  shadow(mint: string, decision: "skip" | "buy" | "failed", reason: string, minutes: number): void {
+  /**
+   * Keep tracking a token after the decision, to learn what it did next. With `keepWatching` the per-token
+   * subscription stays open for the whole window (real peak, trough, end and price path); without it, per-token
+   * feeds drop the subscription now and only a firehose keeps updating the shadow.
+   */
+  shadow(mint: string, decision: "skip" | "buy" | "failed", reason: string, minutes: number, keepWatching = false): void {
     const st = this.tokens.get(mint);
     if (!st || minutes <= 0) {
       if (st && !st.pinned) this.drop(mint);
       return;
     }
     const mcap = st.lastPrice * st.totalSupply;
-    st.shadow = { decision, mcapAtDecision: mcap, maxMcap: mcap, minMcap: mcap, until: nowMs() + minutes * 60_000, reason };
+    const now = nowMs();
+    st.shadow = { decision, reason, startedAt: now, until: now + minutes * 60_000, watched: keepWatching, mcapAtDecision: mcap, maxMcap: mcap, minMcap: mcap, lastMcap: mcap, ticks: 0 };
     st.ticks = st.ticks.slice(-5);
-    // Per-token feeds drop the subscription now; a firehose keeps updating the shadow for free.
-    this.emit("unwatch", mint);
+    if (!keepWatching) {
+      st.path = undefined;
+      this.emit("unwatch", mint);
+    }
+  }
+
+  /** Shadows still holding a per-token subscription. */
+  watchedShadowCount(): number {
+    let n = 0;
+    for (const st of this.tokens.values()) if (st.shadow?.watched) n++;
+    return n;
   }
 
   unwatch(mint: string): void {
@@ -183,15 +237,22 @@ export class TokenTracker extends EventEmitter {
     st.lastTradeTs = t.ts;
     st.realTokens = t.realTokens;
     if (st.firstRealTokens === 0) st.firstRealTokens = t.realTokens;
+    const mcap = st.lastPrice * st.totalSupply;
+    const isDev = st.dev !== undefined && t.user === st.dev;
+    const pctSupply = st.totalSupply > 0 ? (t.tokens / st.totalSupply) * 100 : 0;
+    if (st.path) {
+      if (st.path.length < this.pathMaxPoints) st.path.push([t.ts - st.firstSeen, round(mcap, 2), round(t.isBuy ? t.sol : -t.sol, 4), round(pctSupply, 3), isDev ? 1 : 0]);
+      else st.pathTruncated = true;
+    }
     if (st.shadow) {
-      const mcap = st.lastPrice * st.totalSupply;
       st.shadow.maxMcap = Math.max(st.shadow.maxMcap, mcap);
       st.shadow.minMcap = Math.min(st.shadow.minMcap, mcap);
+      st.shadow.lastMcap = mcap;
+      st.shadow.ticks++;
       return;
     }
     st.ticks.push(t);
     if (st.ticks.length > this.maxTicks) st.ticks.splice(0, st.ticks.length - this.maxTicks);
-    const isDev = st.dev !== undefined && t.user === st.dev;
     const cur = st.holdings.get(t.user) ?? 0;
     st.holdings.set(t.user, cur + (t.isBuy ? t.tokens : -t.tokens));
     if (t.isBuy) {
@@ -199,7 +260,6 @@ export class TokenTracker extends EventEmitter {
       else if (st.launch && t.signature !== st.launch.signature) st.devExtraBuySol += t.sol;
     } else {
       if (isDev) st.devSold = true;
-      const pctSupply = st.totalSupply > 0 ? (t.tokens / st.totalSupply) * 100 : 0;
       st.recentSells.push({ ts: t.ts, pctSupply, user: t.user });
       if (st.recentSells.length > 50) st.recentSells.splice(0, st.recentSells.length - 50);
     }
@@ -312,12 +372,12 @@ export class TokenTracker extends EventEmitter {
   }
 
   /** Drops expired shadows and stale launch timestamps. Returns finished shadow records for logging. */
-  prune(): { mint: string; symbol: string; shadow: NonNullable<TokenState["shadow"]> }[] {
+  prune(): FinishedShadow[] {
     const now = nowMs();
-    const done: { mint: string; symbol: string; shadow: NonNullable<TokenState["shadow"]> }[] = [];
+    const done: FinishedShadow[] = [];
     for (const [mint, st] of this.tokens) {
       if (st.shadow && st.shadow.until <= now && !st.pinned) {
-        done.push({ mint, symbol: st.launch?.symbol ?? "", shadow: st.shadow });
+        done.push({ mint, symbol: st.launch?.symbol ?? "", firstSeen: st.firstSeen, graduated: st.graduated, shadow: st.shadow, path: st.path, pathTruncated: st.pathTruncated ?? false });
         this.drop(mint);
       } else if (!st.shadow && !st.pinned && now - st.firstSeen > 30 * 60_000 && st.ticks.length === 0) {
         this.drop(mint);

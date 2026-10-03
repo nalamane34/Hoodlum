@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Logger } from "../logger.js";
 import type { Position } from "../types.js";
-import { errMsg } from "../util.js";
+import { errMsg, utcDayKey } from "../util.js";
 
 export interface StoreState {
   version: 1;
@@ -78,6 +78,32 @@ export class Store {
       fs.appendFileSync(path.join(this.dataDir, name), JSON.stringify(obj) + "\n");
     } catch (e) {
       this.log.warn("jsonl append failed", { name, err: errMsg(e) });
+    }
+  }
+
+  /** Appends to DATA_DIR/<dir>/<UTC day>.jsonl. One file per day, so old days are deleted whole instead of rewritten. */
+  appendDaily(dir: string, obj: unknown, ts = Date.now()): void {
+    try {
+      const d = path.join(this.dataDir, dir);
+      fs.mkdirSync(d, { recursive: true });
+      fs.appendFileSync(path.join(d, `${utcDayKey(ts)}.jsonl`), JSON.stringify(obj) + "\n");
+    } catch (e) {
+      this.log.warn("daily jsonl append failed", { dir, err: errMsg(e) });
+    }
+  }
+
+  /** Deletes the day files in DATA_DIR/<dir> older than `keepDays`. */
+  pruneDaily(dir: string, keepDays: number, now = Date.now()): void {
+    const d = path.join(this.dataDir, dir);
+    try {
+      if (!fs.existsSync(d)) return;
+      const cutoff = utcDayKey(now - keepDays * 86_400_000);
+      for (const f of fs.readdirSync(d)) {
+        const m = /^(\d{4}-\d{2}-\d{2})\.jsonl$/.exec(f);
+        if (m && m[1] < cutoff) fs.unlinkSync(path.join(d, f));
+      }
+    } catch (e) {
+      this.log.warn("daily jsonl prune failed", { dir, err: errMsg(e) });
     }
   }
 

@@ -184,7 +184,7 @@ export class Portfolio {
       p.realizedPnlSol = p.proceedsSol - p.costSol;
       this.risk.onClosed(p.realizedPnlSol, fill.ts);
       this.tracker.pin(p.mint, false);
-      this.tracker.shadow(p.mint, "buy", reason, this.cfg.SHADOW_TRACK_MINUTES);
+      this.tracker.shadow(p.mint, "buy", reason, this.cfg.SHADOW_TRACK_MINUTES, true);
       if (/dev_sold|whale_dump/.test(reason) && p.dev && !this.store.state.learnedCreatorBlacklist.includes(p.dev)) {
         this.store.state.learnedCreatorBlacklist.push(p.dev);
       }
