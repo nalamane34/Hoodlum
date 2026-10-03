@@ -57,7 +57,8 @@ export class LaunchStrategy {
     if (fails.length) {
       this.stats.prefiltered++;
       this.record(ev, { decision: "skip", score: 0, hardFails: fails, reasons: [], features: { devPct: ev.totalSupply ? +((ev.initialBuyTokens / ev.totalSupply) * 100).toFixed(1) : 0, mayhem: ev.isMayhem } }, ev.vTokens > 0 ? (ev.vSol / ev.vTokens) * ev.totalSupply : 0);
-      this.tracker.shadow(ev.mint, "skip", fails[0], this.cfg.SHADOW_TRACK_MINUTES);
+      if (this.cfg.SHADOW_PREFILTERED) this.tracker.shadow(ev.mint, "skip", fails[0], this.cfg.SHADOW_TRACK_MINUTES);
+      else this.tracker.unwatch(ev.mint);
       return;
     }
     this.stats.observed++;
@@ -65,7 +66,7 @@ export class LaunchStrategy {
       ev,
       startedAt: Date.now(),
       socials: fetchSocials(ev.uri, this.log),
-      creator: this.walletInfo.info(ev.dev, 3000),
+      creator: Promise.resolve(null),
       timer: setTimeout(() => void this.decide(ev.mint, "window"), this.cfg.OBSERVE_SECONDS * 1000),
       decided: false,
     };
@@ -109,20 +110,22 @@ export class LaunchStrategy {
     const quick = scoreLaunch({ launch: ev, obs, socials: null, creatorInfo: null, holders: null, sampledBuyers: [], cfg: scoreCfg });
     let holders = null as Awaited<ReturnType<typeof holderStats>>;
     let sampled: SampledBuyer[] = [];
+    let creatorInfo: Awaited<ReturnType<WalletInfoCache["info"]>> = null;
     if (quick.hardFails.length === 0 && gate.ok) {
-      const [h, s] = await Promise.all([
+      const [h, s, c] = await Promise.all([
         this.cfg.MAX_TOP10_PCT > 0 ? withTimeout(holderStats(this.conn, new PublicKey(mint), ev.totalSupply), 2000, "holders").catch(() => null) : Promise.resolve(null),
         this.sampleBuyers(obs.earliestBuyers),
+        this.walletInfo.info(ev.dev, 1500).catch(() => null),
       ]);
       holders = h;
       sampled = s;
+      creatorInfo = c;
       if (this.cfg.MAX_TOP10_PCT > 0 && !h && !this.holderWarned) {
         this.holderWarned = true;
         this.log.warn("holder check unavailable (getTokenLargestAccounts failed or rate-limited; public RPC returns 429 for it). MAX_TOP10_PCT is not enforced until your RPC serves it.");
       }
     }
     const socials = await withTimeout(cand.socials, 400, "socials").catch(() => null);
-    const creatorInfo = await withTimeout(cand.creator, 400, "creator").catch(() => null);
     const result = scoreLaunch({ launch: ev, obs, socials, creatorInfo, holders, sampledBuyers: sampled, cfg: scoreCfg });
     if (!gate.ok) result.hardFails.push(`risk:${gate.reason}`);
     const finalDecision = result.hardFails.length === 0 && result.decision === "buy" ? "buy" : "skip";

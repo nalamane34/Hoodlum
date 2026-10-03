@@ -28,10 +28,11 @@ import { RateLimiter, errMsg, shortKey } from "./util.js";
 async function main(): Promise<void> {
   const cfg = loadConfig();
   const log = new Logger(cfg.LOG_LEVEL, path.join(cfg.DATA_DIR, "bot.log"));
-  log.info(`meme-trader starting in ${cfg.MODE.toUpperCase()} mode`, { feeds: [...cfg.feeds].join(","), sender: cfg.SENDER, rpc: new URL(cfg.RPC_URL).host });
+  log.info(`meme-trader starting in ${cfg.MODE.toUpperCase()} mode`, { feeds: [...cfg.feeds].join(","), sender: cfg.SENDER, rpc: new URL(cfg.RPC_URL).host, ws: new URL(cfg.wsUrl).host, background: new URL(cfg.RPC_BACKGROUND_URL).host });
   if (cfg.live) log.warn("LIVE MODE: real SOL will be traded without confirmation prompts. Kill switch: `npm run panic`.");
 
   const conn = makeConnection(cfg);
+  const bgConn = cfg.RPC_BACKGROUND_URL === cfg.RPC_URL ? conn : makeConnection(cfg, cfg.RPC_BACKGROUND_URL);
   const wallet = cfg.WALLET_SECRET_KEY ? loadKeypair(cfg.WALLET_SECRET_KEY) : Keypair.generate();
   log.info(`wallet ${wallet.publicKey.toBase58()}${cfg.WALLET_SECRET_KEY ? "" : " (ephemeral, paper only)"}`);
 
@@ -49,7 +50,7 @@ async function main(): Promise<void> {
   const risk = new RiskManager(cfg, store, log.child("risk"));
   const portfolio = new Portfolio(cfg, store, tracker, executor, risk, jup, log.child("pf"));
   const limiter = new RateLimiter(cfg.RPC_MAX_RPS);
-  const walletInfo = new WalletInfoCache(conn, limiter);
+  const walletInfo = new WalletInfoCache(bgConn, limiter);
   const launch = new LaunchStrategy(cfg, conn, tracker, portfolio, executor, risk, store, walletInfo, log.child("launch"));
   const copy = new CopyStrategy(cfg, conn, tracker, portfolio, executor, risk, store, log.child("copy"));
 
@@ -138,7 +139,7 @@ async function main(): Promise<void> {
         let mcapAtEnd: number | null = s.shadow.maxMcap > 0 ? +s.shadow.maxMcap.toFixed(2) : null;
         if (cfg.TRADE_FEED === "watched" && (await limiter.take(500))) {
           try {
-            const { curve } = await pump.fetchCurve(new PublicKey(s.mint));
+            const { curve } = await pump.fetchCurve(new PublicKey(s.mint), bgConn);
             mcapAtEnd = +PumpClient.marketCapSol(curve).toFixed(2);
           } catch {
             /* token may be gone */

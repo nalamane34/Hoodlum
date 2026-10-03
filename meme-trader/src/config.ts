@@ -15,6 +15,8 @@ export const ConfigSchema = z.object({
   MODE: z.enum(["paper", "live"]).default("paper"),
   RPC_URL: str("https://api.mainnet-beta.solana.com"),
   RPC_WS_URL: optStr,
+  /** Endpoint for low-priority background reads (shadow outcome sampling, creator wallet history). Defaults to the public RPC so the paid plan's credits go to trading. */
+  RPC_BACKGROUND_URL: str("https://api.mainnet-beta.solana.com"),
   RPC_MAX_RPS: num(8),
   WALLET_SECRET_KEY: optStr,
 
@@ -69,6 +71,8 @@ export const ConfigSchema = z.object({
   SAMPLE_BUYERS: num(4),
   RING_MAX_SAMPLED: num(2),
   SHADOW_TRACK_MINUTES: num(10),
+  /** Also track outcomes of launches rejected before observation (mayhem, dev holdings...). Off by default: they are never tradeable, and sampling them costs an RPC call each. */
+  SHADOW_PREFILTERED: bool.default(false),
 
   COPY_ENABLED: bool.default(false),
   COPY_WALLETS: str(""),

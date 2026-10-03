@@ -57,8 +57,8 @@ export class PumpClient {
     }
   }
 
-  async fetchCurve(mint: PublicKey): Promise<CurveState> {
-    const accountInfo = await this.conn.getAccountInfo(bondingCurvePda(mint), "processed");
+  async fetchCurve(mint: PublicKey, conn: Connection = this.conn): Promise<CurveState> {
+    const accountInfo = await conn.getAccountInfo(bondingCurvePda(mint), "processed");
     if (!accountInfo) throw new Error(`bonding curve not found for ${mint.toBase58()}`);
     return { accountInfo, curve: this.sdk.decodeBondingCurve(accountInfo) };
   }
