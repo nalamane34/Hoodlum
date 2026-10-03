@@ -153,6 +153,7 @@ src/
   tools/                 keygen, status, panic, smoke
 test/                    unit tests (vitest) incl. a real mainnet log sample
 docs/RESEARCH.md         the research and the design rationale
+docs/HANDOFF.md          project state and next steps for a new session
 ```
 
 ## Commands
