@@ -5,6 +5,12 @@ import { errMsg, sleep } from "../util.js";
 
 type Notify = (result: unknown) => void;
 
+/** No frame of any kind (pong included) for this long means the connection is dead. */
+const SILENT_RECONNECT_MS = 120_000;
+/** Backoff after a refused connection (HTTP 429 from the provider): start high, cap at 10 minutes. */
+const RATE_LIMIT_BACKOFF_MS = 60_000;
+const MAX_BACKOFF_MS = 10 * 60_000;
+
 export function safeUrlLabel(url: string): string {
   try {
     return new URL(url).host;
@@ -36,6 +42,11 @@ export class RpcWs {
   private heartbeat: NodeJS.Timeout | null = null;
   bytesReceived = 0;
   messagesReceived = 0;
+  connectedAt = 0;
+  /** Seconds since the socket was last (re)connected, for the status line. */
+  get uptimeSec(): number {
+    return this.connected && this.connectedAt ? Math.round((Date.now() - this.connectedAt) / 1000) : 0;
+  }
 
   /** host only, so API keys in the query string never reach the logs */
   private readonly label: string;
@@ -52,14 +63,15 @@ export class RpcWs {
     this.closed = false;
     this.connect();
     this.heartbeat = setInterval(() => {
-      if (!this.ws) return;
-      if (Date.now() - this.lastMessage > 45_000) {
-        this.log.warn("ws silent for 45s, reconnecting", { url: this.label });
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      const silent = Date.now() - this.lastMessage;
+      if (silent > SILENT_RECONNECT_MS) {
+        this.log.warn(`ws silent for ${Math.round(silent / 1000)}s, reconnecting`, { url: this.label });
         this.ws.terminate();
-      } else if (this.ws.readyState === WebSocket.OPEN) {
+      } else {
         this.ws.ping();
       }
-    }, 15_000);
+    }, 20_000);
   }
 
   stop(): void {
@@ -80,6 +92,7 @@ export class RpcWs {
     ws.on("open", () => {
       this.lastMessage = Date.now();
       this.backoff = 1000;
+      this.connectedAt = Date.now();
       this.log.info("ws connected", { url: this.label, subs: this.subs.size });
       for (const sub of this.subs.values()) this.sendSubscribe(sub);
     });
@@ -91,15 +104,23 @@ export class RpcWs {
       this.onMessage(text);
     });
     ws.on("pong", () => (this.lastMessage = Date.now()));
-    ws.on("error", (e) => this.log.warn("ws error", { url: this.label, err: errMsg(e) }));
+    ws.on("error", (e) => {
+      const msg = errMsg(e);
+      this.log.warn("ws error", { url: this.label, err: msg });
+      // A 429 on the handshake means the provider is refusing connections (plan limits): do not hammer it.
+      if (/\b429\b/.test(msg)) this.backoff = Math.max(this.backoff, RATE_LIMIT_BACKOFF_MS);
+    });
     ws.on("close", async () => {
+      if (this.ws === ws) this.ws = null;
       this.byServerId.clear();
       for (const p of this.pending.values()) p.reject(new Error("ws closed"));
       this.pending.clear();
       if (this.closed) return;
-      this.log.warn(`ws closed, reconnecting in ${this.backoff}ms`, { url: this.label });
-      await sleep(this.backoff);
-      this.backoff = Math.min(this.backoff * 2, 30_000);
+      const wait = Math.round(this.backoff * (0.8 + Math.random() * 0.4));
+      this.log.warn(`ws closed, reconnecting in ${Math.round(wait / 1000)}s`, { url: this.label });
+      await sleep(wait);
+      if (this.closed) return;
+      this.backoff = Math.min(this.backoff * 2, MAX_BACKOFF_MS);
       this.connect();
     });
   }

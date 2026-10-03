@@ -167,7 +167,7 @@ async function main(): Promise<void> {
     const open = portfolio.open();
     const pos = open.map((p) => `${p.symbol}:${(p.lastPrice / p.entryPrice).toFixed(2)}x`).join(" ");
     log.info(
-      `status | ${cfg.MODE} | bal ${cfg.live ? "(live)" : store.state.paperSol.toFixed(3)} | today ${risk.dailyPnl().toFixed(4)} SOL | total ${store.state.realizedPnlSol.toFixed(4)} SOL (${store.state.closedCount} closed) | open ${open.length} ${pos} | launches ${launch.stats.launches} observed ${launch.stats.observed} bought ${launch.stats.bought} | feed trades ${rpcLogs?.decodedTrades ?? grpc?.received ?? 0}${rpcLogs && cfg.TRADE_FEED === "watched" ? ` (subs ${rpcLogs.watchedCount})` : ""} | ws ${(rpcWs.bytesReceived / 1e6).toFixed(1)}MB (${rpcWs.messagesReceived} msgs) | pp ${pp?.received ?? 0} | tracked ${tracker.size} | kill ${store.killSwitch()}`,
+      `status | ${cfg.MODE} | bal ${cfg.live ? "(live)" : store.state.paperSol.toFixed(3)} | today ${risk.dailyPnl().toFixed(4)} SOL | total ${store.state.realizedPnlSol.toFixed(4)} SOL (${store.state.closedCount} closed) | open ${open.length} ${pos} | launches ${launch.stats.launches} observed ${launch.stats.observed} bought ${launch.stats.bought} | feed trades ${rpcLogs?.decodedTrades ?? grpc?.received ?? 0}${rpcLogs && cfg.TRADE_FEED === "watched" ? ` (subs ${rpcLogs.watchedCount})` : ""} | ws ${rpcWs.connected ? `up ${rpcWs.uptimeSec}s` : "DOWN"} ${(rpcWs.bytesReceived / 1e6).toFixed(1)}MB (${rpcWs.messagesReceived} msgs) | pp ${pp?.received ?? 0} | tracked ${tracker.size} | kill ${store.killSwitch()}`,
     );
   }, cfg.STATUS_EVERY_SEC * 1000);
 
