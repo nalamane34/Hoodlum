@@ -2,7 +2,7 @@ import "dotenv/config";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { COOKIE_NAME, LoginLimiter, clearCookie, clientAddress, cookieValue, isSecure, loginPage, safeEqual, safeNext, sessionCookie } from "../dashboard/auth.js";
+import { COOKIE_NAME, LoginLimiter, bearerToken, clearCookie, clientAddress, cookieValue, isSecure, loginPage, safeEqual, safeNext, sessionCookie } from "../dashboard/auth.js";
 import { JsonlTail, dataPath, fileMtimeMs, readJsonFile, tailLines } from "../dashboard/files.js";
 import { summarize, type FillRow, type ShadowRow, type StateFile, type Summary } from "../dashboard/summary.js";
 import type { Position, ScoredLaunch } from "../types.js";
@@ -11,7 +11,7 @@ import type { Position, ScoredLaunch } from "../types.js";
  * Read-only dashboard for the bot's data directory. Serves one page and one JSON endpoint.
  *   DASHBOARD_HOST   127.0.0.1 (default; reach it through an SSH tunnel or a reverse proxy such as Caddy) or 0.0.0.0
  *   DASHBOARD_PORT   8787
- *   DASHBOARD_TOKEN  required unless the host is loopback; entered once on /login (a cookie is set), or passed as ?token=
+ *   DASHBOARD_TOKEN  required unless the host is loopback; entered once on /login (a cookie is set), passed as ?token=, or sent as Authorization: Bearer
  *   DASHBOARD_TRUST_PROXY  true when behind Caddy/nginx: use X-Forwarded-For / X-Forwarded-Proto for rate limiting and Secure cookies
  */
 const DATA_DIR = process.env.DATA_DIR ?? "./data";
@@ -74,6 +74,8 @@ function authorised(req: http.IncomingMessage, url: URL): boolean {
   if (!TOKEN) return true;
   const q = url.searchParams.get("token");
   if (q && safeEqual(q, TOKEN)) return true;
+  const b = bearerToken(req.headers.authorization);
+  if (b && safeEqual(b, TOKEN)) return true;
   const c = cookieValue(req.headers.cookie, COOKIE_NAME);
   return Boolean(c && safeEqual(c, TOKEN));
 }

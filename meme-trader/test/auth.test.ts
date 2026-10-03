@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LoginLimiter, clientAddress, cookieValue, isSecure, safeNext, sessionCookie } from "../src/dashboard/auth.js";
+import { bearerToken, clientAddress, cookieValue, isSecure, LoginLimiter, safeNext, sessionCookie } from "../src/dashboard/auth.js";
 
 describe("dashboard auth helpers", () => {
   it("reads the session cookie", () => {
@@ -38,5 +38,17 @@ describe("dashboard auth helpers", () => {
     expect(safeNext("//evil.com")).toBe("/");
     expect(safeNext("https://evil.com")).toBe("/");
     expect(safeNext(null)).toBe("/");
+  });
+});
+
+describe("bearerToken", () => {
+  it("reads a Bearer header case-insensitively and ignores anything else", () => {
+    expect(bearerToken("Bearer abc123")).toBe("abc123");
+    expect(bearerToken("bearer   abc123  ")).toBe("abc123");
+    expect(bearerToken(["Bearer first", "Bearer second"])).toBe("first");
+    expect(bearerToken("Basic abc123")).toBeNull();
+    expect(bearerToken("Bearer")).toBeNull();
+    expect(bearerToken("Bearer two words")).toBeNull();
+    expect(bearerToken(undefined)).toBeNull();
   });
 });

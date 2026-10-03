@@ -8,6 +8,13 @@ export function safeEqual(a: string, b: string): boolean {
   return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
 }
 
+/** Token from an `Authorization: Bearer ...` header (for scripts; browsers use the cookie). */
+export function bearerToken(authorization: string | string[] | undefined): string | null {
+  const h = Array.isArray(authorization) ? authorization[0] : authorization;
+  const m = /^\s*Bearer\s+(\S+)\s*$/i.exec(h ?? "");
+  return m ? m[1] : null;
+}
+
 export function cookieValue(cookieHeader: string | undefined, name = COOKIE_NAME): string | null {
   if (!cookieHeader) return null;
   const m = new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(cookieHeader);
