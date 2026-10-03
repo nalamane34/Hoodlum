@@ -21,6 +21,8 @@ cd "$APP_DIR"
 echo "building in $APP_DIR"
 npm ci
 npm run build
+# Production servers keep only runtime packages (no test runner, bundler or TypeScript tooling).
+npm prune --omit=dev >/dev/null 2>&1 || true
 
 if [[ ! -f .env ]]; then
   cp .env.example .env
@@ -108,5 +110,5 @@ Useful:
   sudo systemctl stop ${SERVICE}     # stop the bot (positions resume on start)
   npm run status                     # positions and PnL
   npm run panic -- --liquidate       # emergency: sell everything, open nothing new
-  git pull && npm ci && npm run build && sudo systemctl restart ${SERVICE}   # update
+  git pull && npm ci && npm run build && npm prune --omit=dev && sudo systemctl restart ${SERVICE}   # update
 MSG

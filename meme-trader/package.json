@@ -12,12 +12,16 @@
     "test": "vitest run",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "keygen": "tsx src/tools/keygen.ts",
-    "status": "tsx src/tools/status.ts",
-    "panic": "tsx src/tools/panic.ts",
-    "smoke": "tsx src/tools/smoke.ts",
+    "keygen": "node dist/tools/keygen.js",
+    "status": "node dist/tools/status.js",
+    "panic": "node dist/tools/panic.js",
+    "smoke": "node dist/tools/smoke.js",
     "dashboard": "node dist/tools/dashboard.js",
-    "dashboard:dev": "tsx src/tools/dashboard.ts"
+    "dashboard:dev": "tsx src/tools/dashboard.ts",
+    "keygen:dev": "tsx src/tools/keygen.ts",
+    "status:dev": "tsx src/tools/status.ts",
+    "panic:dev": "tsx src/tools/panic.ts",
+    "smoke:dev": "tsx src/tools/smoke.ts"
   },
   "dependencies": {
     "@pump-fun/pump-sdk": "2.0.0",
@@ -26,9 +30,9 @@
     "bn.js": "^5.2.2",
     "bs58": "^6.0.0",
     "dotenv": "^16.4.5",
+    "https-proxy-agent": "^7.0.5",
     "ws": "^8.18.0",
-    "zod": "^3.23.8",
-    "https-proxy-agent": "^7.0.5"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.6",
@@ -36,6 +40,6 @@
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.7"
   }
 }

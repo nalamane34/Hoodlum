@@ -26,6 +26,7 @@ Every scored launch (features, decision, reasons) goes to `data/launches.jsonl`,
 cd meme-trader
 npm install
 cp .env.example .env          # defaults are paper mode on the public RPC
+npm run build                 # compile once (rerun after git pull)
 npm run smoke                 # read-only self test: RPC, pump.fun globals, live quote, Jupiter
 npm run dev                   # starts observing launches and paper trading
 ```
@@ -153,16 +154,18 @@ docs/RESEARCH.md         the research and the design rationale
 ## Commands
 
 ```bash
-npm run dev        # run from source (tsx)
-npm run build      # compile to dist/
-npm start          # run compiled
-npm test           # unit tests
-npm run typecheck
+npm run build      # compile to dist/ (required once before the commands below)
+npm start          # run the bot
+npm run dashboard  # run the dashboard
 npm run smoke      # read-only connectivity + SDK self-test
 npm run keygen     # new bot wallet
 npm run status     # positions and PnL from data/state.json
 npm run panic      # kill switch (see above)
+npm test           # unit tests (needs dev dependencies: npm ci)
+npm run dev        # run from source without building (tsx); *:dev variants exist for the tools too
 ```
+
+On servers the deploy script runs `npm prune --omit=dev` after building, so the test runner, bundler and TypeScript tooling (where most `npm audit` noise lives) are not installed there.
 
 ## Safety notes
 

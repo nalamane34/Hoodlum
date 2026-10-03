@@ -6,7 +6,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 setenv() { if grep -q "^$1=" .env; then sed -i "s#^$1=.*#$1=$2#" .env; else printf '%s=%s\n' "$1" "$2" >> .env; fi; }
 setenv RPC_BACKGROUND_URL https://api.mainnet-beta.solana.com
 setenv SHADOW_PREFILTERED false
-npm ci && npm run build
+npm ci && npm run build && npm prune --omit=dev
 sudo systemctl restart meme-trader
 sleep 15
 journalctl -u meme-trader -n 8 --no-pager
