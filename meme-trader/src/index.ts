@@ -3,6 +3,7 @@ import path from "node:path";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { loadConfig } from "./config.js";
 import { makeConnection } from "./chain/connection.js";
+import { failoverFor } from "./chain/rpcFailover.js";
 import { WalletInfoCache } from "./chain/creator.js";
 import { FeeOracle } from "./chain/fees.js";
 import { Jupiter } from "./chain/jupiter.js";
@@ -28,11 +29,12 @@ import { RateLimiter, errMsg, shortKey } from "./util.js";
 async function main(): Promise<void> {
   const cfg = loadConfig();
   const log = new Logger(cfg.LOG_LEVEL, path.join(cfg.DATA_DIR, "bot.log"));
-  log.info(`meme-trader starting in ${cfg.MODE.toUpperCase()} mode`, { feeds: [...cfg.feeds].join(","), sender: cfg.SENDER, rpc: new URL(cfg.RPC_URL).host, ws: new URL(cfg.wsUrl).host, background: new URL(cfg.RPC_BACKGROUND_URL).host });
+  log.info(`meme-trader starting in ${cfg.MODE.toUpperCase()} mode`, { feeds: [...cfg.feeds].join(","), sender: cfg.SENDER, rpc: new URL(cfg.RPC_URL).host, ws: new URL(cfg.wsUrl).host, background: new URL(cfg.RPC_BACKGROUND_URL).host, fallback: new URL(cfg.RPC_FALLBACK_URL).host });
   if (cfg.live) log.warn("LIVE MODE: real SOL will be traded without confirmation prompts. Kill switch: `npm run panic`.");
 
-  const conn = makeConnection(cfg);
-  const bgConn = cfg.RPC_BACKGROUND_URL === cfg.RPC_URL ? conn : makeConnection(cfg, cfg.RPC_BACKGROUND_URL);
+  const conn = makeConnection(cfg, cfg.RPC_URL, log.child("rpc"));
+  const bgConn = cfg.RPC_BACKGROUND_URL === cfg.RPC_URL ? conn : makeConnection(cfg, cfg.RPC_BACKGROUND_URL, log.child("rpc-bg"));
+  const rpcHealth = failoverFor(cfg.RPC_URL);
   const wallet = cfg.WALLET_SECRET_KEY ? loadKeypair(cfg.WALLET_SECRET_KEY) : Keypair.generate();
   log.info(`wallet ${wallet.publicKey.toBase58()}${cfg.WALLET_SECRET_KEY ? "" : " (ephemeral, paper only)"}`);
 
@@ -168,7 +170,7 @@ async function main(): Promise<void> {
     const open = portfolio.open();
     const pos = open.map((p) => `${p.symbol}:${(p.lastPrice / p.entryPrice).toFixed(2)}x`).join(" ");
     log.info(
-      `status | ${cfg.MODE} | bal ${cfg.live ? "(live)" : store.state.paperSol.toFixed(3)} | today ${risk.dailyPnl().toFixed(4)} SOL | total ${store.state.realizedPnlSol.toFixed(4)} SOL (${store.state.closedCount} closed) | open ${open.length} ${pos} | launches ${launch.stats.launches} observed ${launch.stats.observed} bought ${launch.stats.bought} | feed trades ${rpcLogs?.decodedTrades ?? grpc?.received ?? 0}${rpcLogs && cfg.TRADE_FEED === "watched" ? ` (subs ${rpcLogs.watchedCount})` : ""} | ws ${rpcWs.connected ? `up ${rpcWs.uptimeSec}s` : "DOWN"} ${(rpcWs.bytesReceived / 1e6).toFixed(1)}MB (${rpcWs.messagesReceived} msgs) | pp ${pp?.received ?? 0} | tracked ${tracker.size} | kill ${store.killSwitch()}`,
+      `status | ${cfg.MODE} | bal ${cfg.live ? "(live)" : store.state.paperSol.toFixed(3)} | today ${risk.dailyPnl().toFixed(4)} SOL | total ${store.state.realizedPnlSol.toFixed(4)} SOL (${store.state.closedCount} closed) | open ${open.length} ${pos} | launches ${launch.stats.launches} observed ${launch.stats.observed} bought ${launch.stats.bought} | feed trades ${rpcLogs?.decodedTrades ?? grpc?.received ?? 0}${rpcLogs && cfg.TRADE_FEED === "watched" ? ` (subs ${rpcLogs.watchedCount})` : ""} | ws ${rpcWs.connected ? `up ${rpcWs.uptimeSec}s` : "DOWN"} ${(rpcWs.bytesReceived / 1e6).toFixed(1)}MB (${rpcWs.messagesReceived} msgs) | pp ${pp?.received ?? 0} | rpc ${rpcHealth?.state ?? "primary"} ${rpcHealth?.primaryRequests ?? 0} req${rpcHealth?.failovers ? ` (${rpcHealth.failovers} via fallback)` : ""} | tracked ${tracker.size} | kill ${store.killSwitch()}`,
     );
   }, cfg.STATUS_EVERY_SEC * 1000);
 

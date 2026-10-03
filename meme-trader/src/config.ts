@@ -17,6 +17,8 @@ export const ConfigSchema = z.object({
   RPC_WS_URL: optStr,
   /** Endpoint for low-priority background reads (shadow outcome sampling, creator wallet history). Defaults to the public RPC so the paid plan's credits go to trading. */
   RPC_BACKGROUND_URL: str("https://api.mainnet-beta.solana.com"),
+  RPC_FALLBACK_URL: str("https://api.mainnet-beta.solana.com"),
+  RPC_FAILOVER_TRIP_SEC: num(600),
   RPC_MAX_RPS: num(8),
   WALLET_SECRET_KEY: optStr,
 

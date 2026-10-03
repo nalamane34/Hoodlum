@@ -131,6 +131,8 @@ With all filters disabled (a deliberate stress test) the bot bought 5 launches i
 
 Measured usage with the defaults (websocket on the public endpoint, background reads on the public endpoint): the paid plan serves only the trading path and the top-holder check for launches that pass the free signals, roughly 20 to 40 thousand credits a month in paper mode plus about 50 credits per live trade. Helius's free tier (1 million credits a month, 10 requests a second) is enough; what pushed the first day over the limit was the websocket, which Helius meters at 20 credits per MB and which carries mostly failed bot transactions.
 
+When the budget is spent anyway, Helius answers every request with `429 Too Many Requests: max usage reached` until the billing cycle resets (a new key in the same account does not reset it). The bot does not stop: every connection sits behind a breaker (`src/chain/rpcFailover.ts`) that re-sends failing requests to `RPC_FALLBACK_URL` (public RPC by default), routes everything there once the primary reports spent credits, rejects the key or fails repeatedly, and probes the primary every `RPC_FAILOVER_TRIP_SEC` seconds to move back. The status line shows `rpc primary|fallback` and the number of requests sent to the primary, which on Helius is close to the credits used.
+
 ## Costs you should know
 
 A bonding-curve round trip costs about 1.25% in and 1.25% out in pump.fun fees at launch-size market caps, plus a priority fee or tip (typically 0.0005 to 0.003 SOL), plus slippage. Jupiter adds 50 bps on tokens younger than 24 hours. Expect 3 to 5% before slippage; a trade must move at least that much to break even. The paper mode models fees and a slippage penalty (`PAPER_FEE_SOL`, `PAPER_SLIPPAGE_PCT`); make them pessimistic.

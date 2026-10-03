@@ -29,10 +29,12 @@ export interface RawTransaction {
   version?: number | "legacy";
 }
 
+import { rpcFetch } from "./rpcFailover.js";
+
 export const MAX_SUPPORTED_TX_VERSION = 1;
 
 export async function getTransactionRaw(rpcUrl: string, signature: string, encoding: "json" | "jsonParsed" = "jsonParsed"): Promise<RawTransaction | null> {
-  const res = await fetch(rpcUrl, {
+  const res = await rpcFetch(rpcUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
