@@ -167,6 +167,7 @@ npm run keygen     # new bot wallet
 npm run status     # positions and PnL from data/state.json
 npm run panic      # kill switch (see above)
 npm run rulecheck  # fresh-data check of the frozen entry rules (docs/EXPERIMENTS.md)
+npm run backtest   # replay the exit settings on saved price paths; -- --set KEY=VALUE for what-ifs
 npm test           # unit tests (needs dev dependencies: npm ci)
 npm run dev        # run from source without building (tsx); *:dev variants exist for the tools too
 ```

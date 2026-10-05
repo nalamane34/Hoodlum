@@ -51,8 +51,11 @@ export interface ShadowState {
   ticks: number;
 }
 
-/** One trade: ms since the token was first seen, market cap in SOL after it, SOL in (+) or out (-), % of supply traded, 1 if the dev traded. */
-export type PathPoint = [dtMs: number, mcapSol: number, sol: number, pctSupply: number, dev: 0 | 1];
+/**
+ * One trade: ms since the token was first seen, market cap in SOL after it, SOL in (+) or out (-), % of supply traded,
+ * 1 if the dev traded, and the trader's wallet (paths saved before 5 October 2026 have no wallet).
+ */
+export type PathPoint = [dtMs: number, mcapSol: number, sol: number, pctSupply: number, dev: 0 | 1, wallet?: string];
 
 export interface FinishedShadow {
   mint: string;
@@ -241,7 +244,7 @@ export class TokenTracker extends EventEmitter {
     const isDev = st.dev !== undefined && t.user === st.dev;
     const pctSupply = st.totalSupply > 0 ? (t.tokens / st.totalSupply) * 100 : 0;
     if (st.path) {
-      if (st.path.length < this.pathMaxPoints) st.path.push([t.ts - st.firstSeen, round(mcap, 2), round(t.isBuy ? t.sol : -t.sol, 4), round(pctSupply, 3), isDev ? 1 : 0]);
+      if (st.path.length < this.pathMaxPoints) st.path.push([t.ts - st.firstSeen, round(mcap, 2), round(t.isBuy ? t.sol : -t.sol, 4), round(pctSupply, 3), isDev ? 1 : 0, t.user]);
       else st.pathTruncated = true;
     }
     if (st.shadow) {

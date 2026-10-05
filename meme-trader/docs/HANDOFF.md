@@ -39,6 +39,15 @@ every setting.
 - Experiments in progress: `docs/EXPERIMENTS.md` (three entry rules on fresh trades via `npm run rulecheck`; exit
   changes once price paths exist). Do not change entry or exit settings before those are decided.
 
+## Update, 5 October 2026
+
+- Paper: 259 closed, -1.333 SOL (balance 3.667 of 5). Experiments 1-4 in `docs/EXPERIMENTS.md` are decided: the launch
+  sniper as built has no edge once reaction time is realistic (speed is the main loss driver; launch features predict
+  nothing out of sample). `MIN_SCORE=70` and `MAX_ENTRY_MCAP_SOL=60` are set on the server per experiment 1.
+- New: `npm run backtest` (replays `.env` exits on saved paths with buy and sell delays) and wallets in path points.
+- Next: experiment 5 (smart wallets), decided after two full days of wallet data. The owner wants to keep pushing;
+  do not go live on the current strategy.
+
 ## State at handoff
 
 - Paper mode since 1 October. After about 20 hours: 15 closed trades, 27% win rate, -0.0975 SOL on a 5 SOL paper balance; exits dominated by dev-sell and whale-dump panics, most of the loss from modelled fees and slippage. The feed was degraded for most of that time (next point), so these numbers are not yet meaningful.

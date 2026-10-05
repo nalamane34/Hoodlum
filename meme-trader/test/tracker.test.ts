@@ -109,7 +109,7 @@ describe("TokenTracker", () => {
     expect(d.shadow.lastMcap).toBeLessThan(d.shadow.mcapAtDecision);
     expect(d.path).toHaveLength(3); // the trade before the decision and both after it
     expect(d.path![0][0]).toBe(500);
-    expect(d.path![2]).toEqual([3000, expect.any(Number), -1, 5, 1]);
+    expect(d.path![2]).toEqual([3000, expect.any(Number), -1, 5, 1, "DEV"]);
     expect(d.pathTruncated).toBe(false);
   });
   it("caps the price path and drops it for shadows that are not kept subscribed", () => {
