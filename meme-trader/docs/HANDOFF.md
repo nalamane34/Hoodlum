@@ -45,6 +45,8 @@ every setting.
   sniper as built has no edge once reaction time is realistic (speed is the main loss driver; launch features predict
   nothing out of sample). `MIN_SCORE=70` and `MAX_ENTRY_MCAP_SOL=60` are set on the server per experiment 1.
 - New: `npm run backtest` (replays `.env` exits on saved paths with buy and sell delays) and wallets in path points.
+- Exits are now checked on every trade of a held token, not only on the once-a-second tick (the backtest what-if
+  `--tick 0 --delay 500` cut the loss per would-buy trade on the newer data from -0.0076 to -0.0029 SOL).
 - Next: experiment 5 (smart wallets), decided after two full days of wallet data. The owner wants to keep pushing;
   do not go live on the current strategy.
 

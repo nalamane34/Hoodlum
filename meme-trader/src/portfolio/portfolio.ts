@@ -7,7 +7,7 @@ import type { TokenTracker } from "../strategy/tracker.js";
 import type { Fill, Position, Strategy, TradeTick } from "../types.js";
 import { TOKEN_UNIT, errMsg, newId } from "../util.js";
 import type { RiskManager } from "./risk.js";
-import type { Store } from "./store.js";
+import type { KillSwitch, Store } from "./store.js";
 
 export interface OpenMeta {
   mint: string;
@@ -23,6 +23,8 @@ export interface OpenMeta {
 export class Portfolio {
   private selling = new Set<string>();
   private lastAmmQuote = new Map<string, number>();
+  /** kill switch as last read by tick(), so per-trade checks do not hit the disk */
+  private lastKill: KillSwitch = "none";
 
   constructor(
     private cfg: Config,
@@ -83,10 +85,12 @@ export class Portfolio {
     return pos;
   }
 
+  /** Marks the price and checks exits right away: waiting for the next tick costs up to a second, which replays showed is most of the loss. */
   onTrade(t: TradeTick): void {
     for (const p of this.open()) {
       if (p.mint !== t.mint || p.venue !== "curve") continue;
       if (t.vTokens > 0) markPrice(p, t.vSol / t.vTokens, this.cfg.exits, t.ts);
+      this.check(p, Date.now(), this.lastKill);
     }
   }
 
@@ -117,27 +121,29 @@ export class Portfolio {
     }
   }
 
-  /** Evaluate exits for every open position. Called about once per second. */
+  /** Evaluate exits for every open position. Called about once per second (time-based rules, AMM prices, kill switch). */
   async tick(): Promise<void> {
     const now = Date.now();
-    const kill = this.store.killSwitch();
-    for (const p of this.open()) {
-      if (this.selling.has(p.id)) continue;
-      const st = this.tracker.get(p.mint);
-      if (kill === "liquidate") {
-        void this.sell(p, 100, "kill_switch_liquidate", true);
-        continue;
-      }
-      const action = evaluateExit(p, this.cfg.exits, {
-        now,
-        price: p.lastPrice,
-        devSold: st?.devSold ?? false,
-        whaleDumpPct: this.tracker.whaleDumpPct(p.mint),
-        graduated: p.venue === "amm" || (st?.graduated ?? false),
-        lastTradeTs: p.venue === "amm" ? now : Math.max(p.lastTradeTs, st?.lastTradeTs ?? 0),
-      });
-      if (action) void this.sell(p, action.pct, action.reason, action.urgent, action.rungs);
+    this.lastKill = this.store.killSwitch();
+    for (const p of this.open()) this.check(p, now, this.lastKill);
+  }
+
+  private check(p: Position, now: number, kill: KillSwitch): void {
+    if (this.selling.has(p.id) || p.status !== "open") return;
+    if (kill === "liquidate") {
+      void this.sell(p, 100, "kill_switch_liquidate", true);
+      return;
     }
+    const st = this.tracker.get(p.mint);
+    const action = evaluateExit(p, this.cfg.exits, {
+      now,
+      price: p.lastPrice,
+      devSold: st?.devSold ?? false,
+      whaleDumpPct: this.tracker.whaleDumpPct(p.mint),
+      graduated: p.venue === "amm" || (st?.graduated ?? false),
+      lastTradeTs: p.venue === "amm" ? now : Math.max(p.lastTradeTs, st?.lastTradeTs ?? 0),
+    });
+    if (action) void this.sell(p, action.pct, action.reason, action.urgent, action.rungs);
   }
 
   async sell(p: Position, pct: number, reason: string, urgent: boolean, rungs: number[] = []): Promise<void> {
